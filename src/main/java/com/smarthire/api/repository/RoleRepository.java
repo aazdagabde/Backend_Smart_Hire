@@ -9,5 +9,8 @@ import java.util.Optional;
 @Repository
 public interface RoleRepository extends JpaRepository<Role, Long> {
 
-    // Une méthode pour trouver un rôle par son nom (ex: "ROLE_RH")
+    // Ajoutez cette ligne :
+    // Spring Data JPA va générer la requête SQL "SELECT * FROM roles WHERE name = ?"
+    Optional<Role> findByName(String name);
+
 }
