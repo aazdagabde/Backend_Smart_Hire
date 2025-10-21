@@ -17,7 +17,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username)
             throws UsernameNotFoundException {
-        User user = users.findByName(username)
+        User user = users.findByEmail(username)
                 .orElseThrow(() ->
                         new UsernameNotFoundException("Utilisateur introuvable"));
         // Retourne spring UserDetails, avec login/password/roles
