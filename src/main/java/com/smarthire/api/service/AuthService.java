@@ -16,7 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional; // Important pour gérer les transactions
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
@@ -33,23 +33,25 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtProvider jwtProvider;
 
-    @Transactional // Assure que l'opération est atomique
+    @Transactional
     public void register(RegisterRequest request) {
-        // 1. Vérifier si l'email existe déjà
+        // Validation des données d'entrée
+        validateRegisterRequest(request);
+
+        // Vérifier si l'email existe déjà
         if (userRepository.existsByEmail(request.email())) {
             throw new IllegalArgumentException("Erreur: Email déjà utilisé!");
         }
 
-        // 2. Créer le nouvel utilisateur
+        // Créer le nouvel utilisateur
         User user = User.builder()
-                .firstName(request.firstName())
-                .lastName(request.lastName())
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password())) // Hasher le mot de passe
+                .firstName(request.firstName().trim())
+                .lastName(request.lastName().trim())
+                .email(request.email().toLowerCase().trim())
+                .password(passwordEncoder.encode(request.password()))
                 .build();
 
-        // 3. Assigner un rôle par défaut (ex: ROLE_CANDIDAT)
-        // Cherche le rôle, ou le crée s'il n'existe pas (bonne pratique pour le premier lancement)
+        // Assigner un rôle par défaut
         Role userRole = roleRepository.findByName("ROLE_CANDIDAT")
                 .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CANDIDAT").build()));
 
@@ -57,38 +59,75 @@ public class AuthService {
         roles.add(userRole);
         user.setRoles(roles);
 
-        // 4. Sauvegarder l'utilisateur
+        // Sauvegarder l'utilisateur
         userRepository.save(user);
     }
 
     public LoginResponse login(LoginRequest request) {
-        // 1. Authentifier l'utilisateur via Spring Security
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+        // Validation des données d'entrée
+        validateLoginRequest(request);
 
-        // 2. Mettre l'authentification dans le contexte de sécurité
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        try {
+            // Authentifier l'utilisateur via Spring Security
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.email().toLowerCase().trim(),
+                            request.password()
+                    )
+            );
 
-        // 3. Générer le token JWT
-        String jwt = jwtProvider.generateToken(authentication.getName()); // authentication.getName() retourne l'email
+            // Mettre l'authentification dans le contexte de sécurité
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // 4. Récupérer les détails de l'utilisateur pour la réponse
-        // Note: L'authentification réussie garantit que l'utilisateur existe
-        User userDetails = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé après authentification réussie - devrait être impossible"));
+            // Générer le token JWT
+            String jwt = jwtProvider.generateToken(authentication.getName());
 
-        List<String> roles = userDetails.getAuthorities().stream()
-                .map(item -> item.getAuthority())
-                .collect(Collectors.toList());
+            // Récupérer les détails de l'utilisateur pour la réponse
+            User userDetails = userRepository.findByEmail(request.email().toLowerCase().trim())
+                    .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé: " + request.email()));
 
-        // 5. Construire et retourner la réponse
-        return new LoginResponse(
-                jwt,
-                userDetails.getId(),
-                userDetails.getEmail(),
-                userDetails.getFirstName(),
-                userDetails.getLastName(),
-                roles
-        );
+            List<String> roles = userDetails.getAuthorities().stream()
+                    .map(item -> item.getAuthority())
+                    .collect(Collectors.toList());
+
+            // Construire et retourner la réponse
+            return new LoginResponse(
+                    jwt,
+                    userDetails.getId(),
+                    userDetails.getEmail(),
+                    userDetails.getFirstName(),
+                    userDetails.getLastName(),
+                    roles
+            );
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Email ou mot de passe incorrect");
+        }
+    }
+
+    private void validateRegisterRequest(RegisterRequest request) {
+        if (request.firstName() == null || request.firstName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Le prénom est obligatoire");
+        }
+        if (request.lastName() == null || request.lastName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Le nom est obligatoire");
+        }
+        if (request.email() == null || request.email().trim().isEmpty()) {
+            throw new IllegalArgumentException("L'email est obligatoire");
+        }
+        if (request.password() == null || request.password().isEmpty()) {
+            throw new IllegalArgumentException("Le mot de passe est obligatoire");
+        }
+        if (request.password().length() < 6) {
+            throw new IllegalArgumentException("Le mot de passe doit contenir au moins 6 caractères");
+        }
+    }
+
+    private void validateLoginRequest(LoginRequest request) {
+        if (request.email() == null || request.email().trim().isEmpty()) {
+            throw new IllegalArgumentException("L'email est obligatoire");
+        }
+        if (request.password() == null || request.password().isEmpty()) {
+            throw new IllegalArgumentException("Le mot de passe est obligatoire");
+        }
     }
 }
