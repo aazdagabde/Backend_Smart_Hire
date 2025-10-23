@@ -1,0 +1,23 @@
+# Fichiers générés par Maven
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+# Fichiers IDE et logs
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.settings/
+.classpath
+.project
+.factorypath
+*.log
+
+# Fichiers Git
+.git
+.gitignore
+.gitattributes
+
+# Fichiers système
+.DS_Store
