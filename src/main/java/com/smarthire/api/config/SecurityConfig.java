@@ -3,6 +3,7 @@ package com.smarthire.api.config;
 import com.smarthire.api.security.CustomUserDetailsService;
 import com.smarthire.api.security.JwtFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -30,6 +31,9 @@ public class SecurityConfig {
     private final JwtFilter jwtFilter;
     private final CustomUserDetailsService userDetailsService;
 
+    @Value("${app.cors.allowed-origins}")
+    private List<String> allowedOrigins;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -48,13 +52,13 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // Configuration CORS pour accepter localhost:3000
+    // Configuration CORS
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Autoriser localhost:3000
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:3000"));
+        // Autoriser les origines configurées dans les propriétés
+        configuration.setAllowedOriginPatterns(allowedOrigins);
 
         // Méthodes HTTP autorisées
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
