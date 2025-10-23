@@ -1,6 +1,0 @@
-url= mysql://root:ZOEhfiIZanCGFQxosHavGbiOcWIPBowZ@caboose.proxy.rlwy.net:15507/railway
-
-raw mysql command = mysql -h caboose.proxy.rlwy.net -u root -p ZOEhfiIZanCGFQxosHavGbiOcWIPBowZ --port 15507 --protocol=TCP railway
-
-cli connect command = railway connect MySQL
-
