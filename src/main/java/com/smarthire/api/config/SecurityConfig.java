@@ -40,10 +40,10 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Activation CORS
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll() // Routes publiques
-                        .requestMatchers("/api/public/**").permitAll() // Autres routes publiques
+                        .requestMatchers("/api/auth/**").permitAll() // Routes d'authentification
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/offers", "/api/offers/**").permitAll() // Permet la LECTURE des offres
                         .requestMatchers("/error").permitAll() // Autoriser les pages d'erreur
-                        .anyRequest().authenticated() // Toutes les autres sont privées
+                        .anyRequest().authenticated() // Toutes les autres sont privées (y compris POST, PUT, DELETE sur /api/offers)
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(daoAuthenticationProvider())

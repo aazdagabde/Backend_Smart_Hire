@@ -41,6 +41,17 @@ public class User implements UserDetails {
     )
     private Set<Role> roles;
 
+    // --- AJOUTER CETTE SECTION ---
+    // Relation: Un utilisateur (RH) peut créer plusieurs offres
+    @OneToMany(
+            mappedBy = "createdBy", // "createdBy" est le nom du champ dans JobOffer.java
+            cascade = CascadeType.ALL, // Si on supprime un User, ses offres sont supprimées
+            orphanRemoval = true
+    )
+    @com.fasterxml.jackson.annotation.JsonIgnore // Évite les boucles infinies lors de la sérialisation
+    private Set<JobOffer> jobOffers = new java.util.HashSet<>();
+    // --- FIN DE L'AJOUT ---
+
     // --- Méthodes de UserDetails ---
 
     @Override
