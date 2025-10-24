@@ -27,9 +27,26 @@ public class JobOfferService {
     // --- Méthodes publiques (pour les candidats) ---
 
     @Transactional(readOnly = true)
-    public List<JobOfferResponse> getAllPublicOffers() {
-        // Ne retourne que les offres publiées
-        return jobOfferRepository.findByStatus(OfferStatus.PUBLISHED).stream()
+    // MODIFICATION DE LA LOGIQUE DE RECHERCHE ICI
+    public List<JobOfferResponse> getAllPublicOffers(String searchTerm) {
+        List<JobOffer> offers;
+        if (searchTerm != null && !searchTerm.trim().isEmpty()) {
+
+            // Étape 1 : Préparer le terme de recherche
+            // Mettre en minuscules et ajouter les wildcards (%)
+            String processedSearchTerm = "%" + searchTerm.trim().toLowerCase() + "%";
+
+            // Étape 2 : Appeler la méthode du repository (corrigée)
+            offers = jobOfferRepository.findPublishedOffersBySearchTerm(
+                    OfferStatus.PUBLISHED,
+                    processedSearchTerm
+            );
+        } else {
+            // Comportement normal si pas de terme de recherche
+            offers = jobOfferRepository.findByStatus(OfferStatus.PUBLISHED);
+        }
+
+        return offers.stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
@@ -74,7 +91,7 @@ public class JobOfferService {
         JobOffer offer = jobOfferRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Offre non trouvée: " + id));
 
-        // Vérification de sécurité : Seul le créateur de l'offre peut la modifier
+        // Vérification de sécurité
         if (!offer.getCreatedBy().equals(hrUser)) {
             throw new AccessDeniedException("Vous n'êtes pas autorisé à modifier cette offre.");
         }
@@ -97,11 +114,10 @@ public class JobOfferService {
         JobOffer offer = jobOfferRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Offre non trouvée: " + id));
 
-        // Vérification de sécurité : Seul le créateur de l'offre peut la supprimer
+        // Vérification de sécurité
         if (!offer.getCreatedBy().equals(hrUser)) {
             throw new AccessDeniedException("Vous n'êtes pas autorisé à supprimer cette offre.");
         }
-
         jobOfferRepository.delete(offer);
     }
 
@@ -110,11 +126,11 @@ public class JobOfferService {
         User hrUser = userRepository.findByEmail(hrEmail)
                 .orElseThrow(() -> new EntityNotFoundException("Utilisateur RH non trouvé: " + hrEmail));
 
-        // Utilise la méthode existante du repository
         return jobOfferRepository.findByCreatedById(hrUser.getId()).stream()
-                .map(this::convertToResponse) // Réutilise le mapper DTO existant
+                .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
+
 
     // --- Méthodes utilitaires ---
 
@@ -122,7 +138,8 @@ public class JobOfferService {
         try {
             return ContractType.valueOf(type.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Type de contrat invalide: " + type);
+            throw new IllegalArgumentException("Type de contrat invalide: " + type +
+                    ". Valeurs possibles: CDI, CDD, STAGE, ALTERNANCE, FREELANCE");
         }
     }
 
@@ -130,13 +147,17 @@ public class JobOfferService {
         try {
             return OfferStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Statut d'offre invalide: " + status);
+            throw new IllegalArgumentException("Statut d'offre invalide: " + status +
+                    ". Valeurs possibles: PUBLISHED, DRAFT, ARCHIVED");
         }
     }
 
-    // Mapper Entité vers DTO
     private JobOfferResponse convertToResponse(JobOffer offer) {
-        String fullName = offer.getCreatedBy().getFirstName() + " " + offer.getCreatedBy().getLastName();
+        String fullName = (offer.getCreatedBy() != null)
+                ? offer.getCreatedBy().getFirstName() + " " + offer.getCreatedBy().getLastName()
+                : "Inconnu";
+        Long createdById = (offer.getCreatedBy() != null) ? offer.getCreatedBy().getId() : null;
+
         return new JobOfferResponse(
                 offer.getId(),
                 offer.getTitle(),
@@ -144,7 +165,7 @@ public class JobOfferService {
                 offer.getLocation(),
                 offer.getContractType().name(),
                 offer.getStatus().name(),
-                offer.getCreatedBy().getId(),
+                createdById,
                 fullName,
                 offer.getCreatedAt(),
                 offer.getUpdatedAt()
