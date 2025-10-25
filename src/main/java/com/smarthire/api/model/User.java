@@ -1,5 +1,6 @@
 package com.smarthire.api.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data; // Ou @Getter, @Setter, @NoArgsConstructor, @AllArgsConstructor
 import lombok.Builder;
@@ -10,6 +11,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -50,6 +52,10 @@ public class User implements UserDetails {
     )
     @com.fasterxml.jackson.annotation.JsonIgnore // Évite les boucles infinies lors de la sérialisation
     private Set<JobOffer> jobOffers = new java.util.HashSet<>();
+    // NOUVELLE RELATION : Un utilisateur (Candidat) peut avoir plusieurs candidatures
+    @OneToMany(mappedBy = "applicant", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore // Important pour éviter les boucles JSON
+    private Set<Application> applications = new HashSet<>();
     // --- FIN DE L'AJOUT ---
 
     // --- Méthodes de UserDetails ---

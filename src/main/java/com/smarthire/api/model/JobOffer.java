@@ -1,5 +1,6 @@
 package com.smarthire.api.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.smarthire.api.model.enums.ContractType;
 import com.smarthire.api.model.enums.OfferStatus;
 import jakarta.persistence.*;
@@ -11,6 +12,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 @Data
 @Builder
@@ -46,6 +49,11 @@ public class JobOffer {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User createdBy;
+
+    // NOUVELLE RELATION : Une offre peut avoir plusieurs candidatures
+    @OneToMany(mappedBy = "jobOffer", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore // Important pour éviter les boucles JSON
+    private Set<Application> applications = new HashSet<>();
 
     @CreationTimestamp
     private Instant createdAt;
