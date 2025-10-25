@@ -35,6 +35,10 @@ public class User implements UserDetails {
 
     private String password;
 
+    // NOUVELLE MODIFICATION
+    @Column(nullable = true) // On le met nullable
+    private String phoneNumber;
+
     @ManyToMany(fetch = FetchType.EAGER) // Charger les rôles immédiatement
     @JoinTable(
             name = "user_roles",
@@ -52,6 +56,7 @@ public class User implements UserDetails {
     )
     @com.fasterxml.jackson.annotation.JsonIgnore // Évite les boucles infinies lors de la sérialisation
     private Set<JobOffer> jobOffers = new java.util.HashSet<>();
+
     // NOUVELLE RELATION : Un utilisateur (Candidat) peut avoir plusieurs candidatures
     @OneToMany(mappedBy = "applicant", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore // Important pour éviter les boucles JSON

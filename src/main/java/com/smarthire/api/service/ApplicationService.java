@@ -128,4 +128,45 @@ public class ApplicationService {
 
         return application;
     }
+    // 5. METTRE À JOUR LE CV D'UNE CANDIDATURE
+    @Transactional
+    public ApplicationResponse updateApplicationCv(Long applicationId, MultipartFile cvFile, String candidateEmail) throws IOException {
+
+        // --- Validation du fichier (similaire à applyToOffer) ---
+        if (cvFile.isEmpty()) {
+            throw new IllegalArgumentException("Le fichier CV ne peut pas être vide.");
+        }
+        if (!Objects.equals(cvFile.getContentType(), "application/pdf")) {
+            throw new IllegalArgumentException("Le CV doit être au format PDF.");
+        }
+        if (cvFile.getSize() > MAX_CV_SIZE) { // MAX_CV_SIZE est déjà défini dans votre classe
+            throw new IllegalArgumentException("Le fichier CV ne doit pas dépasser 5MB.");
+        }
+
+        // --- Récupération des entités ---
+        User candidate = userRepository.findByEmail(candidateEmail)
+                .orElseThrow(() -> new EntityNotFoundException("Candidat non trouvé."));
+
+        Application application = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new EntityNotFoundException("Candidature non trouvée."));
+
+        // --- Vérifications métier ---
+        // Sécurité : Vérifier que le candidat est bien le propriétaire de la candidature
+        if (!application.getApplicant().equals(candidate)) {
+            throw new AccessDeniedException("Vous n'êtes pas autorisé à modifier cette candidature.");
+        }
+
+        // --- Mise à jour de l'entité Application ---
+        String fileName = StringUtils.cleanPath(Objects.requireNonNull(cvFile.getOriginalFilename()));
+
+        application.setCvData(cvFile.getBytes());
+        application.setCvFileName(fileName);
+        application.setCvFileType(cvFile.getContentType());
+        // Optionnel : Changer le statut si vous le souhaitez
+        // application.setStatus(ApplicationStatus.PENDING);
+        // application.setAppliedAt(Instant.now()); // Mettre à jour la date de "modification"
+
+        Application savedApplication = applicationRepository.save(application);
+        return ApplicationResponse.fromEntity(savedApplication);
+    }
 }

@@ -110,6 +110,30 @@ public class ApplicationController {
         }
     }
 
+    /**
+     * Endpoint pour un CANDIDAT pour mettre à jour son CV pour une candidature existante.
+     */
+    @PutMapping("/{applicationId}/cv")
+    @PreAuthorize("hasAuthority('ROLE_CANDIDAT')")
+    public ResponseEntity<?> updateApplicationCv(
+            @PathVariable Long applicationId,
+            @RequestParam("cv") MultipartFile cvFile) {
+
+        try {
+            String candidateEmail = getAuthenticatedUserEmail();
+            ApplicationResponse response = applicationService.updateApplicationCv(applicationId, cvFile, candidateEmail);
+            return ResponseEntity.ok(createSuccessResponse(response, "CV mis à jour avec succès."));
+
+        } catch (IOException e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors du traitement du fichier CV.", e.getMessage());
+        } catch (IllegalArgumentException | EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.BAD_REQUEST, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Une erreur est survenue.", e.getMessage());
+        }
+    }
 
     // --- Méthodes utilitaires (copiées de AuthController/JobOfferController) ---
 

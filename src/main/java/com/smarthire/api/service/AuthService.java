@@ -49,6 +49,7 @@ public class AuthService {
                 .lastName(request.lastName().trim())
                 .email(request.email().toLowerCase().trim())
                 .password(passwordEncoder.encode(request.password()))
+                .phoneNumber(request.phoneNumber()) // NOUVELLE MODIFICATION
                 .build();
 
         // Assigner un rôle par défaut
@@ -120,6 +121,7 @@ public class AuthService {
         if (request.password().length() < 6) {
             throw new IllegalArgumentException("Le mot de passe doit contenir au moins 6 caractères");
         }
+        // Pas de validation pour le phoneNumber, il est optionnel
     }
 
     private void validateLoginRequest(LoginRequest request) {

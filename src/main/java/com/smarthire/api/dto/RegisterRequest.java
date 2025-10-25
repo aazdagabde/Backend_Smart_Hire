@@ -14,5 +14,6 @@ public record RegisterRequest(
         String email,
 
         // @NotBlank @Size(min = 6) // Ajoutez une validation de taille si désiré
-        String password
+        String password,
+        String phoneNumber
 ) {}

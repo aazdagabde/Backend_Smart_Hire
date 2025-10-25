@@ -10,6 +10,11 @@ public record ApplicationResponse(
         String jobOfferTitle,
         Long applicantId,
         String applicantName,
+
+        // NOUVELLES MODIFICATIONS
+        String applicantEmail,
+        String applicantPhoneNumber,
+
         String status,
         String cvFileName,
         String cvFileType,
@@ -23,6 +28,15 @@ public record ApplicationResponse(
                 ? app.getApplicant().getFirstName() + " " + app.getApplicant().getLastName()
                 : "Candidat inconnu";
 
+        // NOUVELLES MODIFICATIONS
+        String applicantEmail = (app.getApplicant() != null)
+                ? app.getApplicant().getEmail()
+                : "Email inconnu";
+
+        String applicantPhoneNumber = (app.getApplicant() != null)
+                ? app.getApplicant().getPhoneNumber()
+                : null; // Peut être null
+
         String jobOfferTitle = (app.getJobOffer() != null)
                 ? app.getJobOffer().getTitle()
                 : "Offre inconnue";
@@ -33,6 +47,11 @@ public record ApplicationResponse(
                 jobOfferTitle,
                 app.getApplicant() != null ? app.getApplicant().getId() : null,
                 applicantName,
+
+                // NOUVELLES MODIFICATIONS
+                applicantEmail,
+                applicantPhoneNumber,
+
                 app.getStatus().name(),
                 app.getCvFileName(),
                 app.getCvFileType(),
