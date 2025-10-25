@@ -50,10 +50,15 @@ public class JobOffer {
     @JoinColumn(name = "user_id", nullable = false)
     private User createdBy;
 
-    // NOUVELLE RELATION : Une offre peut avoir plusieurs candidatures
+    // RELATION EXISTANTE : Une offre peut avoir plusieurs candidatures
     @OneToMany(mappedBy = "jobOffer", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore // Important pour éviter les boucles JSON
     private Set<Application> applications = new HashSet<>();
+
+    // NOUVELLE MODIFICATION : Une offre peut avoir plusieurs champs de formulaire personnalisés
+    @OneToMany(mappedBy = "jobOffer", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private Set<CustomFormField> customFormFields = new HashSet<>();
 
     @CreationTimestamp
     private Instant createdAt;

@@ -1,5 +1,6 @@
 package com.smarthire.api.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.smarthire.api.model.enums.ApplicationStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -9,6 +10,8 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 @Data
 @Builder
@@ -49,4 +52,9 @@ public class Application {
 
     @CreationTimestamp
     private Instant appliedAt;
+
+    // NOUVELLE MODIFICATION : Une candidature peut avoir plusieurs données personnalisées
+    @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private Set<ApplicationCustomData> customData = new HashSet<>();
 }

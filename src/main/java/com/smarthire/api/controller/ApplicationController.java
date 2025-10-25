@@ -1,5 +1,7 @@
 package com.smarthire.api.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.smarthire.api.dto.ApplicationCustomDataResponse;
 import com.smarthire.api.dto.ApplicationResponse;
 import com.smarthire.api.model.Application;
 import com.smarthire.api.service.ApplicationService;
@@ -32,16 +34,19 @@ public class ApplicationController {
     /**
      * Endpoint pour un CANDIDAT pour postuler à une offre.
      * Le CV est envoyé en tant que 'multipart/form-data'.
+     * Les données personnalisées sont envoyées en tant que 'multipart/form-data' dans un champ "customData".
      */
-    @PostMapping("/apply/{offerId}")
+    @PostMapping(value = "/apply/{offerId}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     @PreAuthorize("hasAuthority('ROLE_CANDIDAT')")
     public ResponseEntity<?> applyToOffer(
             @PathVariable Long offerId,
-            @RequestParam("cv") MultipartFile cvFile) {
+            @RequestPart("cv") MultipartFile cvFile,
+            @RequestPart(value = "customData", required = false) String customDataJson // Champ optionnel pour les données JSON
+    ) {
 
         try {
             String candidateEmail = getAuthenticatedUserEmail();
-            ApplicationResponse response = applicationService.applyToOffer(offerId, cvFile, candidateEmail);
+            ApplicationResponse response = applicationService.applyToOffer(offerId, cvFile, customDataJson, candidateEmail);
             return ResponseEntity.status(HttpStatus.CREATED).body(createSuccessResponse(response, "Candidature enregistrée avec succès."));
 
         } catch (IOException e) {
@@ -113,7 +118,7 @@ public class ApplicationController {
     /**
      * Endpoint pour un CANDIDAT pour mettre à jour son CV pour une candidature existante.
      */
-    @PutMapping("/{applicationId}/cv")
+    @PutMapping(value = "/{applicationId}/cv", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     @PreAuthorize("hasAuthority('ROLE_CANDIDAT')")
     public ResponseEntity<?> updateApplicationCv(
             @PathVariable Long applicationId,
@@ -135,7 +140,24 @@ public class ApplicationController {
         }
     }
 
-    // --- Méthodes utilitaires (copiées de AuthController/JobOfferController) ---
+    /**
+     * Endpoint pour un RH ou un CANDIDAT pour voir les réponses personnalisées d'une candidature.
+     */
+    @GetMapping("/{applicationId}/custom-data")
+    @PreAuthorize("hasAnyAuthority('ROLE_RH', 'ROLE_CANDIDAT')")
+    public ResponseEntity<?> getApplicationCustomData(@PathVariable Long applicationId) {
+        try {
+            String userEmail = getAuthenticatedUserEmail();
+            List<ApplicationCustomDataResponse> responses = applicationService.getApplicationCustomData(applicationId, userEmail);
+            return ResponseEntity.ok(createSuccessResponse(responses, "Données personnalisées récupérées avec succès."));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        }
+    }
+
+    // --- Méthodes utilitaires ---
 
     private String getAuthenticatedUserEmail() {
         return SecurityContextHolder.getContext().getAuthentication().getName();
