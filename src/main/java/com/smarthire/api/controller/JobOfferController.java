@@ -10,8 +10,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication; // Importer Authentication
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*; // Assurez-vous d'avoir @RequestParam
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,26 +21,21 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/offers")
 @RequiredArgsConstructor
-// @CrossOrigin(origins = "http://localhost:3000", maxAge = 3600, allowCredentials = "true") // Déjà géré globalement dans SecurityConfig
 public class JobOfferController {
 
     private final JobOfferService jobOfferService;
 
     // ======================================================
-    // ENDPOINTS PUBLICS (pour candidats et visiteurs)
+    // ENDPOINTS PUBLICS
     // ======================================================
 
     @GetMapping
-    public ResponseEntity<?> getAllPublicOffers(
-            // Ajouter @RequestParam pour le terme de recherche, non obligatoire (required = false)
-            @RequestParam(required = false) String searchTerm
-    ) {
+    public ResponseEntity<?> getAllPublicOffers(@RequestParam(required = false) String searchTerm) {
         try {
-            // Passer le searchTerm (qui peut être null) au service
             List<JobOfferResponse> offers = jobOfferService.getAllPublicOffers(searchTerm);
-            return ResponseEntity.ok(createSuccessResponse(offers, "Offres récupérées avec succès"));
+            return ResponseEntity.ok(createSuccessResponse(offers, "Offres publiques récupérées"));
         } catch (Exception e) {
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la récupération des offres", e.getMessage());
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur", e.getMessage());
         }
     }
 
@@ -47,15 +43,11 @@ public class JobOfferController {
     public ResponseEntity<?> getPublicOfferById(@PathVariable Long id) {
         try {
             JobOfferResponse offer = jobOfferService.getPublicOfferById(id);
-            return ResponseEntity.ok(createSuccessResponse(offer, "Offre récupérée avec succès"));
+            return ResponseEntity.ok(createSuccessResponse(offer, "Offre récupérée"));
         } catch (EntityNotFoundException e) {
-            // Retourne 404 si l'offre n'est pas trouvée OU n'est pas publiée
             return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
-        } catch (AccessDeniedException e) {
-            // Optionnel : si le service lance AccessDeniedException pour les offres non publiées
-            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
         } catch (Exception e) {
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la récupération de l'offre", e.getMessage());
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur", e.getMessage());
         }
     }
 
@@ -63,32 +55,54 @@ public class JobOfferController {
     // ENDPOINTS SÉCURISÉS (pour RH)
     // ======================================================
 
+    // <<< NOUVEL ENDPOINT (Pour Bug 3) >>>
+    /**
+     * Récupère les détails complets d'une offre pour son propriétaire RH (pour édition),
+     * quel que soit le statut de l'offre.
+     */
+    @GetMapping("/details/{id}")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> getOfferDetailsForOwner(@PathVariable Long id) {
+        try {
+            String hrEmail = getAuthenticatedUserEmail();
+            JobOfferResponse offer = jobOfferService.getOfferDetailsForOwner(id, hrEmail);
+            return ResponseEntity.ok(createSuccessResponse(offer, "Détails de l'offre récupérés"));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) { // Important de catcher AccessDeniedException
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur", e.getMessage());
+        }
+    }
+    // <<< FIN NOUVEL ENDPOINT >>>
+
     @PostMapping
-    @PreAuthorize("hasAuthority('ROLE_RH')") // Sécurise l'endpoint pour les RH
+    @PreAuthorize("hasAuthority('ROLE_RH')")
     public ResponseEntity<?> createOffer(@Valid @RequestBody JobOfferRequest request) {
         try {
             String hrEmail = getAuthenticatedUserEmail();
             JobOfferResponse newOffer = jobOfferService.createOffer(request, hrEmail);
-            // Utilise HttpStatus.CREATED pour la réponse de création
+            // Retourne CREATED avec les données
             Map<String, Object> response = createSuccessResponse(newOffer, "Offre créée avec succès");
-            response.put("status", HttpStatus.CREATED.value()); // Met à jour le statut dans la réponse
+            response.put("status", HttpStatus.CREATED.value());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (IllegalArgumentException | EntityNotFoundException e) {
-            // Erreurs de validation ou utilisateur non trouvé
+        } catch (IllegalArgumentException e) { // Validation métier
             return createErrorResponse(HttpStatus.BAD_REQUEST, e.getMessage(), null);
+        } catch (EntityNotFoundException e) { // Utilisateur RH non trouvé
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
         } catch (Exception e) {
-            // Autres erreurs serveur
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la création de l'offre", e.getMessage());
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur", e.getMessage());
         }
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('ROLE_RH')") // Sécurise l'endpoint
+    @PreAuthorize("hasAuthority('ROLE_RH')")
     public ResponseEntity<?> updateOffer(@PathVariable Long id, @Valid @RequestBody JobOfferRequest request) {
         try {
             String hrEmail = getAuthenticatedUserEmail();
             JobOfferResponse updatedOffer = jobOfferService.updateOffer(id, request, hrEmail);
-            return ResponseEntity.ok(createSuccessResponse(updatedOffer, "Offre mise à jour avec succès"));
+            return ResponseEntity.ok(createSuccessResponse(updatedOffer, "Offre mise à jour"));
         } catch (EntityNotFoundException e) {
             return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
         } catch (AccessDeniedException e) {
@@ -96,58 +110,58 @@ public class JobOfferController {
         } catch (IllegalArgumentException e) {
             return createErrorResponse(HttpStatus.BAD_REQUEST, e.getMessage(), null);
         } catch (Exception e) {
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la mise à jour", e.getMessage());
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur", e.getMessage());
         }
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ROLE_RH')") // Sécurise l'endpoint
+    @PreAuthorize("hasAuthority('ROLE_RH')")
     public ResponseEntity<?> deleteOffer(@PathVariable Long id) {
         try {
             String hrEmail = getAuthenticatedUserEmail();
             jobOfferService.deleteOffer(id, hrEmail);
-            // Pas besoin de retourner de données, juste un message de succès
-            // Spécifie explicitement HttpStatus.OK pour la suppression réussie sans contenu à retourner.
-            Map<String, Object> response = createSuccessResponse(null, "Offre supprimée avec succès");
-            response.put("status", HttpStatus.OK.value()); // Maintient OK pour la suppression
-            return ResponseEntity.ok(response);
-            // Alternative: Si vous préférez retourner 204 No Content (pas de corps de réponse)
-            // return ResponseEntity.noContent().build();
+            // Pas de contenu à retourner après suppression réussie
+            return ResponseEntity.ok(createSuccessResponse(null, "Offre supprimée avec succès"));
+            // Alternative: return ResponseEntity.noContent().build();
         } catch (EntityNotFoundException e) {
             return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
         } catch (AccessDeniedException e) {
             return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
         } catch (Exception e) {
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la suppression", e.getMessage());
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur", e.getMessage());
         }
     }
 
     @GetMapping("/my")
-    @PreAuthorize("hasAuthority('ROLE_RH')") // Sécurise l'endpoint
+    @PreAuthorize("hasAuthority('ROLE_RH')")
     public ResponseEntity<?> getMyOffers() {
         try {
             String hrEmail = getAuthenticatedUserEmail();
             List<JobOfferResponse> offers = jobOfferService.getOffersByRecruiter(hrEmail);
-            return ResponseEntity.ok(createSuccessResponse(offers, "Mes offres récupérées avec succès"));
-        } catch (EntityNotFoundException e) {
-            // Spécifique si l'utilisateur RH n'est pas trouvé (peu probable si authentifié)
-            return createErrorResponse(HttpStatus.NOT_FOUND, "Utilisateur RH non trouvé", e.getMessage());
+            return ResponseEntity.ok(createSuccessResponse(offers, "Mes offres récupérées"));
+        } catch (EntityNotFoundException e) { // Utilisateur non trouvé (peu probable si authentifié)
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
         } catch (Exception e) {
-            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la récupération de mes offres", e.getMessage());
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur", e.getMessage());
         }
     }
 
 
-    // --- Méthodes utilitaires pour les réponses JSON (style AuthController) ---
+    // --- Méthodes utilitaires ---
 
     // Récupère l'email de l'utilisateur authentifié
     private String getAuthenticatedUserEmail() {
-        // Ajouter une vérification pour s'assurer que l'authentification n'est pas nulle
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
-            throw new IllegalStateException("Aucun utilisateur authentifié trouvé.");
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // Vérification plus robuste
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal() == null || "anonymousUser".equals(authentication.getPrincipal().toString())) {
+            throw new IllegalStateException("Aucun utilisateur authentifié ou valide trouvé.");
         }
-        return authentication.getName();
+        // Principal peut être UserDetails ou juste le nom (String)
+        if (authentication.getPrincipal() instanceof org.springframework.security.core.userdetails.UserDetails) {
+            return ((org.springframework.security.core.userdetails.UserDetails) authentication.getPrincipal()).getUsername();
+        } else {
+            return authentication.getPrincipal().toString();
+        }
     }
 
     // Crée une réponse JSON standardisée pour les succès
@@ -155,11 +169,10 @@ public class JobOfferController {
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", message);
-        // Ne pas ajouter 'data' si null pour éviter "data": null dans la réponse JSON
         if (data != null) {
             response.put("data", data);
         }
-        response.put("status", HttpStatus.OK.value()); // Statut par défaut OK, sera ajusté si nécessaire (ex: CREATED)
+        response.put("status", HttpStatus.OK.value());
         return response;
     }
 
@@ -174,5 +187,4 @@ public class JobOfferController {
         errorResponse.put("status", status.value());
         return new ResponseEntity<>(errorResponse, status);
     }
-
 }
