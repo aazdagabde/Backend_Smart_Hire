@@ -46,7 +46,8 @@ public class JobOffer {
     private OfferStatus status;
 
     // Relation: Quel utilisateur (RH) a créé l'offre
-    @ManyToOne(fetch = FetchType.LAZY)
+    // <<< MODIFICATION ICI : EAGER pour résoudre potentiel problème de chargement lors de la vérification >>>
+    @ManyToOne(fetch = FetchType.EAGER) // Charger l'utilisateur immédiatement
     @JoinColumn(name = "user_id", nullable = false)
     private User createdBy;
 
@@ -56,6 +57,7 @@ public class JobOffer {
     private Set<Application> applications = new HashSet<>();
 
     // NOUVELLE MODIFICATION : Une offre peut avoir plusieurs champs de formulaire personnalisés
+    // (Assurez-vous que l'entité CustomFormField est bien créée)
     @OneToMany(mappedBy = "jobOffer", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private Set<CustomFormField> customFormFields = new HashSet<>();
