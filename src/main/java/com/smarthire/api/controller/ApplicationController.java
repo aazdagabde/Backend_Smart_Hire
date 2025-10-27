@@ -1,11 +1,13 @@
+// Fichier : src/main/java/com/smarthire/api/controller/ApplicationController.java
+
 package com.smarthire.api.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.smarthire.api.dto.ApplicationCustomDataResponse;
-import com.smarthire.api.dto.ApplicationResponse;
+import com.smarthire.api.dto.*; // Importe tous les DTOs
 import com.smarthire.api.model.Application;
 import com.smarthire.api.service.ApplicationService;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.Valid; // Pour la validation des DTOs
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -31,6 +33,8 @@ public class ApplicationController {
 
     private final ApplicationService applicationService;
 
+    // ... (endpoints existants: applyToOffer, getMyApplications, getApplicationsForOffer) ...
+    // >>> ASSUREZ-VOUS QUE LES ENDPOINTS EXISTANTS SONT PRÉSENTS ICI <<<
     /**
      * Endpoint pour un CANDIDAT pour postuler à une offre.
      * Le CV est envoyé en tant que 'multipart/form-data'.
@@ -93,7 +97,8 @@ public class ApplicationController {
     }
 
     /**
-     * Endpoint pour un RH ou un CANDIDAT pour télécharger un CV spécifique.
+     * Endpoint pour un RH ou un CANDIDAT pour TÉLÉCHARGER ou AFFICHER un CV.
+     * MODIFIÉ (Amélioration 2) : Changé de "attachment" à "inline"
      */
     @GetMapping("/{applicationId}/cv")
     @PreAuthorize("hasAnyAuthority('ROLE_RH', 'ROLE_CANDIDAT')")
@@ -105,7 +110,8 @@ public class ApplicationController {
 
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(application.getCvFileType()))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + application.getCvFileName() + "\"")
+                    // MODIFICATION : "inline" demande au navigateur d'afficher le fichier
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + application.getCvFileName() + "\"")
                     .body(new ByteArrayResource(application.getCvData()));
 
         } catch (EntityNotFoundException e) {
@@ -156,6 +162,73 @@ public class ApplicationController {
             return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
         }
     }
+
+    // --- ENDPOINTS AJOUTÉS PRÉCÉDEMMENT ---
+
+    // Endpoint : Mettre à jour le statut (RH)
+    @PutMapping("/{applicationId}/status")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> updateApplicationStatus(
+            @PathVariable Long applicationId,
+            @Valid @RequestBody UpdateApplicationStatusRequest request) { // Utilise le nouveau DTO et la validation
+        try {
+            String rhEmail = getAuthenticatedUserEmail();
+            ApplicationResponse updatedApplication = applicationService.updateApplicationStatus(applicationId, request, rhEmail);
+            return ResponseEntity.ok(createSuccessResponse(updatedApplication, "Statut de la candidature mis à jour."));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (IllegalArgumentException e) { // Pour statut invalide ou message trop long
+            return createErrorResponse(HttpStatus.BAD_REQUEST, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur.", e.getMessage());
+        }
+    }
+
+    // Endpoint : Mettre à jour la note du CV (RH)
+    @PutMapping("/{applicationId}/score")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> updateCvScore(
+            @PathVariable Long applicationId,
+            @Valid @RequestBody UpdateCvScoreRequest request) { // Utilise le nouveau DTO et la validation
+        try {
+            String rhEmail = getAuthenticatedUserEmail();
+            ApplicationResponse updatedApplication = applicationService.updateCvScore(applicationId, request, rhEmail);
+            return ResponseEntity.ok(createSuccessResponse(updatedApplication, "Note du CV mise à jour."));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (IllegalArgumentException e) {
+            return createErrorResponse(HttpStatus.BAD_REQUEST, "Données invalides.", e.getMessage());
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur.", e.getMessage());
+        }
+    }
+
+
+    // --- NOUVEL ENDPOINT (Amélioration 3) ---
+
+    // Endpoint : Mettre à jour les notes internes (RH)
+    @PutMapping("/{applicationId}/notes")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> updateInternalNotes(
+            @PathVariable Long applicationId,
+            @Valid @RequestBody UpdateInternalNotesRequest request) {
+        try {
+            String rhEmail = getAuthenticatedUserEmail();
+            ApplicationResponse updatedApplication = applicationService.updateInternalNotes(applicationId, request, rhEmail);
+            return ResponseEntity.ok(createSuccessResponse(updatedApplication, "Notes internes mises à jour."));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur.", e.getMessage());
+        }
+    }
+
 
     // --- Méthodes utilitaires ---
 

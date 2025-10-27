@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smarthire.api.dto.ApplicationCustomDataResponse;
 import com.smarthire.api.dto.ApplicationRequestData;
 import com.smarthire.api.dto.ApplicationResponse;
+import com.smarthire.api.dto.UpdateApplicationStatusRequest;
+import com.smarthire.api.dto.UpdateCvScoreRequest;
+import com.smarthire.api.dto.UpdateInternalNotesRequest;
 import com.smarthire.api.model.Application;
 import com.smarthire.api.model.ApplicationCustomData;
 import com.smarthire.api.model.CustomFormField;
@@ -38,15 +41,13 @@ public class ApplicationService {
     private final ApplicationRepository applicationRepository;
     private final UserRepository userRepository;
     private final JobOfferRepository jobOfferRepository;
-
-    // NOUVELLES INJECTIONS
     private final ApplicationCustomDataRepository applicationCustomDataRepository;
     private final CustomFormFieldRepository customFormFieldRepository;
-    private final ObjectMapper objectMapper; // Pour parser le JSON
+    private final ObjectMapper objectMapper;
 
     private final long MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
 
-    // 1. POSTULER À UNE OFFRE (MODIFIÉ)
+    // 1. POSTULER À UNE OFFRE
     @Transactional
     public ApplicationResponse applyToOffer(Long offerId, MultipartFile cvFile, String customDataJson, String candidateEmail) throws IOException, JsonProcessingException {
 
@@ -92,7 +93,7 @@ public class ApplicationService {
 
         Application savedApplication = applicationRepository.save(application);
 
-        // --- NOUVELLE PARTIE : Sauvegarde des données personnalisées (Etape 2) ---
+        // --- Sauvegarde des données personnalisées (Etape 2) ---
         if (customDataJson != null && !customDataJson.isEmpty()) {
             // Désérialiser la chaîne JSON en une liste de réponses
             List<ApplicationRequestData> customDataList = objectMapper.readValue(customDataJson, new TypeReference<List<ApplicationRequestData>>() {});
@@ -102,7 +103,7 @@ public class ApplicationService {
                 CustomFormField field = customFormFieldRepository.findById(data.getFieldId())
                         .orElseThrow(() -> new EntityNotFoundException("Champ de formulaire non trouvé : " + data.getFieldId()));
 
-                // (Optionnel) Vérifier que le champ appartient bien à l'offre
+                // Vérifier que le champ appartient bien à l'offre
                 if (!field.getJobOffer().equals(jobOffer)) {
                     throw new AccessDeniedException("Tentative de soumission de données pour un champ n'appartenant pas à cette offre.");
                 }
@@ -117,7 +118,6 @@ public class ApplicationService {
                 applicationCustomDataRepository.save(dataEntry);
             }
         }
-        // --- FIN DE LA NOUVELLE PARTIE ---
 
         return ApplicationResponse.fromEntity(savedApplication);
     }
@@ -206,7 +206,6 @@ public class ApplicationService {
         return ApplicationResponse.fromEntity(savedApplication);
     }
 
-    // NOUVELLE MÉTHODE
     // 6. RÉCUPÉRER LES RÉPONSES PERSONNALISÉES D'UNE CANDIDATURE
     @Transactional(readOnly = true)
     public List<ApplicationCustomDataResponse> getApplicationCustomData(Long applicationId, String userEmail) {
@@ -219,5 +218,67 @@ public class ApplicationService {
         return applicationCustomDataRepository.findByApplicationId(applicationId).stream()
                 .map(ApplicationCustomDataResponse::fromEntity)
                 .collect(Collectors.toList());
+    }
+
+    // 7. METTRE À JOUR LE STATUT D'UNE CANDIDATURE
+    @Transactional
+    public ApplicationResponse updateApplicationStatus(Long applicationId, UpdateApplicationStatusRequest request, String rhEmail) {
+        Application application = findApplicationAndVerifyOwnership(applicationId, rhEmail);
+
+        // Valider le nouveau statut
+        ApplicationStatus newStatus;
+        try {
+            newStatus = ApplicationStatus.valueOf(request.status().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Statut invalide : " + request.status());
+        }
+
+        application.setStatus(newStatus);
+        application.setCandidateMessage(request.message()); // Peut être null
+
+        // Logique spécifique si le statut est ACCEPTED
+        if (newStatus == ApplicationStatus.ACCEPTED && (request.message() == null || request.message().isBlank())) {
+            application.setCandidateMessage("Félicitations ! Votre candidature a retenu notre attention. Nous vous contacterons bientôt pour planifier un entretien.");
+        }
+
+        Application updatedApplication = applicationRepository.save(application);
+        return ApplicationResponse.fromEntity(updatedApplication);
+    }
+
+    // 8. METTRE À JOUR LA NOTE DU CV
+    @Transactional
+    public ApplicationResponse updateCvScore(Long applicationId, UpdateCvScoreRequest request, String rhEmail) {
+        Application application = findApplicationAndVerifyOwnership(applicationId, rhEmail);
+
+        application.setCvScore(request.score());
+
+        Application updatedApplication = applicationRepository.save(application);
+        return ApplicationResponse.fromEntity(updatedApplication);
+    }
+
+    // 9. METTRE À JOUR LES NOTES INTERNES
+    @Transactional
+    public ApplicationResponse updateInternalNotes(Long applicationId, UpdateInternalNotesRequest request, String rhEmail) {
+        Application application = findApplicationAndVerifyOwnership(applicationId, rhEmail);
+
+        application.setInternalNotes(request.notes());
+
+        Application updatedApplication = applicationRepository.save(application);
+        return ApplicationResponse.fromEntity(updatedApplication);
+    }
+
+    // Méthode utilitaire pour factoriser la recherche et la vérification de propriété
+    private Application findApplicationAndVerifyOwnership(Long applicationId, String rhEmail) {
+        User rhUser = userRepository.findByEmail(rhEmail)
+                .orElseThrow(() -> new EntityNotFoundException("Recruteur non trouvé."));
+
+        Application application = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new EntityNotFoundException("Candidature non trouvée."));
+
+        // Sécurité : Vérifier que le RH est bien le propriétaire de l'offre associée
+        if (!application.getJobOffer().getCreatedBy().equals(rhUser)) {
+            throw new AccessDeniedException("Vous n'êtes pas autorisé à modifier cette candidature.");
+        }
+        return application;
     }
 }
