@@ -25,12 +25,10 @@ public class Application {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Le candidat qui postule
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "applicant_user_id", nullable = false)
     private User applicant;
 
-    // L'offre à laquelle il postule
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "job_offer_id", nullable = false)
     private JobOffer jobOffer;
@@ -39,7 +37,6 @@ public class Application {
     @Column(nullable = false)
     private ApplicationStatus status;
 
-    // Stockage du fichier CV directement en BDD
     @Lob
     @Column(nullable = false, columnDefinition = "LONGBLOB")
     private byte[] cvData;
@@ -48,13 +45,23 @@ public class Application {
     private String cvFileName;
 
     @Column(nullable = false)
-    private String cvFileType; // ex: "application/pdf"
+    private String cvFileType;
 
     @CreationTimestamp
     private Instant appliedAt;
 
-    // NOUVELLE MODIFICATION : Une candidature peut avoir plusieurs données personnalisées
     @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private Set<ApplicationCustomData> customData = new HashSet<>();
+
+    // NOUVEAUX CHAMPS
+    @Column(nullable = true)
+    private Integer cvScore; // Note sur 10, 100, etc. ou null si non noté
+
+    @Column(nullable = true, length = 255) // Message optionnel pour le candidat
+    private String candidateMessage;
+
+    @Lob
+    @Column(nullable = true, columnDefinition = "TEXT")
+    private String internalNotes; // Notes privées pour le RH
 }

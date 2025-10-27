@@ -1,42 +1,42 @@
+// Fichier : src/main/java/com/smarthire/api/dto/ApplicationResponse.java
+
 package com.smarthire.api.dto;
 
 import com.smarthire.api.model.Application;
 import java.time.Instant;
 
-// DTO pour afficher les détails d'une candidature
 public record ApplicationResponse(
         Long id,
         Long jobOfferId,
         String jobOfferTitle,
         Long applicantId,
         String applicantName,
-
-        // NOUVELLES MODIFICATIONS
         String applicantEmail,
         String applicantPhoneNumber,
-
         String status,
         String cvFileName,
         String cvFileType,
-        Instant appliedAt
+        Instant appliedAt,
+
+        // Champs de la réponse précédente
+        Integer cvScore,
+        String candidateMessage,
+
+        // NOUVEAU CHAMP (Amélioration 3)
+        String internalNotes
 ) {
-    // Méthode de 'fabrique' pour convertir l'entité Application en DTO
     public static ApplicationResponse fromEntity(Application app) {
         if (app == null) return null;
 
         String applicantName = (app.getApplicant() != null)
                 ? app.getApplicant().getFirstName() + " " + app.getApplicant().getLastName()
                 : "Candidat inconnu";
-
-        // NOUVELLES MODIFICATIONS
         String applicantEmail = (app.getApplicant() != null)
                 ? app.getApplicant().getEmail()
                 : "Email inconnu";
-
         String applicantPhoneNumber = (app.getApplicant() != null)
                 ? app.getApplicant().getPhoneNumber()
-                : null; // Peut être null
-
+                : null;
         String jobOfferTitle = (app.getJobOffer() != null)
                 ? app.getJobOffer().getTitle()
                 : "Offre inconnue";
@@ -47,15 +47,19 @@ public record ApplicationResponse(
                 jobOfferTitle,
                 app.getApplicant() != null ? app.getApplicant().getId() : null,
                 applicantName,
-
-                // NOUVELLES MODIFICATIONS
                 applicantEmail,
                 applicantPhoneNumber,
-
                 app.getStatus().name(),
                 app.getCvFileName(),
                 app.getCvFileType(),
-                app.getAppliedAt()
+                app.getAppliedAt(),
+
+                // Champs de la réponse précédente
+                app.getCvScore(),
+                app.getCandidateMessage(),
+
+                // NOUVEAU CHAMP (Amélioration 3)
+                app.getInternalNotes()
         );
     }
 }
