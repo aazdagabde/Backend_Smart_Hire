@@ -3,7 +3,7 @@ package com.smarthire.api.dto;
 import lombok.Builder;
 import lombok.Data;
 
-// DTO pour AFFICHER les informations de profil (sans mot de passe)
+// DTO pour AFFICHER les informations de profil
 @Data
 @Builder
 public class ProfileViewDTO {
@@ -12,6 +12,5 @@ public class ProfileViewDTO {
     private String firstName;
     private String lastName;
     private String phoneNumber;
-    // On peut ajouter un champ pour l'URL de l'image de profil si on veut
     private boolean hasProfilePicture;
 }

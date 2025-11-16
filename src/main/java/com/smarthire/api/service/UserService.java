@@ -24,6 +24,7 @@ public class UserService {
     private final long MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024;
 
     /**
+     * NOUVELLE MÉTHODE
      * Récupère les informations de profil (publiques) d'un utilisateur par son email.
      */
     @Transactional(readOnly = true)
@@ -42,6 +43,7 @@ public class UserService {
     }
 
     /**
+     * NOUVELLE MÉTHODE
      * Met à jour les informations de profil d'un utilisateur.
      */
     @Transactional
@@ -50,7 +52,6 @@ public class UserService {
                 .orElseThrow(() -> new EntityNotFoundException("Utilisateur introuvable pour l'email: " + userEmail));
 
         // Mettre à jour uniquement les champs fournis (s'ils ne sont pas null)
-        // Note : Si vous voulez permettre de mettre à null, la logique doit être ajustée.
         if (updateDTO.getFirstName() != null) {
             user.setFirstName(updateDTO.getFirstName());
         }
@@ -76,6 +77,7 @@ public class UserService {
 
     /**
      * Uploade ou met à jour la photo de profil d'un utilisateur.
+     * (Cette méthode existe déjà dans votre fichier)
      */
     @Transactional // Ajout de @Transactional pour la session
     public void uploadProfilePicture(String userEmail, MultipartFile file) throws IOException {
@@ -107,7 +109,7 @@ public class UserService {
 
     /**
      * Récupère l'entité User complète pour un ID donné.
-     * Nécessaire pour que le contrôleur puisse accéder aux données de l'image.
+     * (Cette méthode existe déjà dans votre fichier)
      */
     @Transactional(readOnly = true) // readOnly = true pour la performance en lecture
     public User getProfilePictureForUser(Long userId) {
