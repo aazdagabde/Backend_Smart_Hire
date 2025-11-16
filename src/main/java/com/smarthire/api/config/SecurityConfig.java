@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -41,7 +42,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll() // Routes d'authentification
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/offers", "/api/offers/**").permitAll() // Permet la LECTURE des offres
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/offers", "/api/offers/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/profile/**").permitAll()
                         .requestMatchers("/error").permitAll() // Autoriser les pages d'erreur
                         .anyRequest().authenticated() // Toutes les autres sont privées (y compris POST, PUT, DELETE sur /api/offers)
                 )
