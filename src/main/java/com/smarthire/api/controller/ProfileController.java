@@ -1,5 +1,7 @@
 package com.smarthire.api.controller;
 
+import com.smarthire.api.dto.ProfileUpdateDTO; // AJOUT
+import com.smarthire.api.dto.ProfileViewDTO; // AJOUT
 import com.smarthire.api.model.User;
 import com.smarthire.api.service.UserService;
 import jakarta.persistence.EntityNotFoundException;
@@ -10,30 +12,69 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException; // AJOUT
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/profile") // Route de base pour tout ce qui concerne le profil
+@RequestMapping("/api/profile")
 @RequiredArgsConstructor
 public class ProfileController {
 
     private final UserService userService;
 
+    // --- ENDPOINTS DE DONNÉES TEXTUELLES (JSON) ---
+
+    /**
+     * NOUVEAU (MANQUANT)
+     * Récupère les détails textuels du profil de l'utilisateur authentifié.
+     * C'est ce que ProfileService.getProfile() appelle.
+     */
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ProfileViewDTO> getProfile() {
+        try {
+            String userEmail = getAuthenticatedUserEmail();
+            ProfileViewDTO profile = userService.getUserProfile(userEmail);
+            return ResponseEntity.ok(profile);
+        } catch (EntityNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur non trouvé", e);
+        }
+    }
+
+    /**
+     * NOUVEAU (MANQUANT)
+     * Met à jour les détails textuels du profil de l'utilisateur authentifié.
+     * C'est ce que ProfileService.updateProfile() appelle.
+     */
+    @PutMapping("/update")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ProfileViewDTO> updateProfile(@RequestBody ProfileUpdateDTO updateDTO) {
+        try {
+            String userEmail = getAuthenticatedUserEmail();
+            ProfileViewDTO updatedProfile = userService.updateUserProfile(userEmail, updateDTO); // <-- CORRIGÉ
+            return ResponseEntity.ok(updatedProfile);
+        } catch (EntityNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur non trouvé", e);
+        }
+    }
+
+
+    // --- ENDPOINTS DE L'IMAGE (BLOB / MULTIPART) ---
+    // Vos endpoints existants, qui sont corrects.
+
     /**
      * Endpoint pour uploader (POST) ou remplacer (PUT) la photo de profil
      * de l'utilisateur authentifié.
      */
-    // J'utilise @PutMapping car c'est une mise à jour de la ressource "profil"
     @PutMapping(value = "/picture", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
-    @PreAuthorize("isAuthenticated()") // Seul un utilisateur connecté peut changer sa propre photo
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> uploadProfilePicture(
             @RequestPart("picture") MultipartFile pictureFile) {
 
@@ -61,29 +102,25 @@ public class ProfileController {
         try {
             User user = userService.getProfilePictureForUser(userId);
 
-            // Vérifier si l'utilisateur a une photo de profil
             if (user.getProfilePicture() == null || user.getProfilePictureType() == null) {
-                // Renvoyer une 404 si pas de photo
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             }
 
-            // Logique de réponse copiée de ApplicationController.downloadCv
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(user.getProfilePictureType()))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline") // "inline" pour afficher, "attachment" pour télécharger
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                     .body(new ByteArrayResource(user.getProfilePicture()));
 
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
-            // Gérer d'autres erreurs potentielles (ex: type MIME invalide)
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
 
     // --- MÉTHODES UTILITAIRES ---
-    // Copiées depuis ApplicationController
+    // (Inchangées)
 
     private String getAuthenticatedUserEmail() {
         return SecurityContextHolder.getContext().getAuthentication().getName();

@@ -41,11 +41,23 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Activation CORS
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll() // Routes d'authentification
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/offers", "/api/offers/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/profile/**").permitAll()
-                        .requestMatchers("/error").permitAll() // Autoriser les pages d'erreur
-                        .anyRequest().authenticated() // Toutes les autres sont privées (y compris POST, PUT, DELETE sur /api/offers)
+                                .requestMatchers("/api/auth/**").permitAll() // Routes d'authentification
+                                .requestMatchers(HttpMethod.GET, "/api/offers", "/api/offers/**").permitAll()
+
+                                // --- CORRECTION APPLIQUÉE ICI ---
+                                // L'ancienne ligne ".requestMatchers(HttpMethod.GET, "/api/profile/**").permitAll()" était trop large
+                                // et entrait en conflit avec @PreAuthorize sur /api/profile/me.
+                                // Nous autorisons publiquement SEULEMENT le GET sur l'image par son ID.
+                                .requestMatchers(HttpMethod.GET, "/api/profile/*/picture").permitAll()
+                                // --- FIN DE LA CORRECTION ---
+                                .requestMatchers(
+                                        "/v3/api-docs/**",
+                                        "/swagger-ui/**",
+                                        "/swagger-ui.html"
+                                ).permitAll()
+                                .requestMatchers("/error").permitAll() // Autoriser les pages d'erreur
+                                .anyRequest().authenticated() // Toutes les autres routes (y compris /api/profile/me, /api/profile/update, etc.)
+                        // nécessitent maintenant une authentification.
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(daoAuthenticationProvider())
@@ -60,8 +72,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         // Autoriser les origines configurées dans les propriétés
-        configuration.setAllowedOriginPatterns(allowedOrigins);
-
+        configuration.setAllowedOrigins(allowedOrigins);
         // Méthodes HTTP autorisées
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
 
