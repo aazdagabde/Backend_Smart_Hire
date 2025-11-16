@@ -1,5 +1,7 @@
 package com.smarthire.api.service;
 
+import com.smarthire.api.dto.ProfileUpdateDTO; // AJOUT
+import com.smarthire.api.dto.ProfileViewDTO; // AJOUT
 import com.smarthire.api.model.User;
 import com.smarthire.api.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -20,6 +22,57 @@ public class UserService {
     // Limite de taille pour la photo (ex: 5MB)
     // Cohérent avec votre application.properties
     private final long MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024;
+
+    /**
+     * Récupère les informations de profil (publiques) d'un utilisateur par son email.
+     */
+    @Transactional(readOnly = true)
+    public ProfileViewDTO getUserProfile(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new EntityNotFoundException("Utilisateur introuvable pour l'email: " + userEmail));
+
+        return ProfileViewDTO.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .phoneNumber(user.getPhoneNumber())
+                .hasProfilePicture(user.getProfilePicture() != null)
+                .build();
+    }
+
+    /**
+     * Met à jour les informations de profil d'un utilisateur.
+     */
+    @Transactional
+    public ProfileViewDTO updateUserProfile(String userEmail, ProfileUpdateDTO updateDTO) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new EntityNotFoundException("Utilisateur introuvable pour l'email: " + userEmail));
+
+        // Mettre à jour uniquement les champs fournis (s'ils ne sont pas null)
+        // Note : Si vous voulez permettre de mettre à null, la logique doit être ajustée.
+        if (updateDTO.getFirstName() != null) {
+            user.setFirstName(updateDTO.getFirstName());
+        }
+        if (updateDTO.getLastName() != null) {
+            user.setLastName(updateDTO.getLastName());
+        }
+        if (updateDTO.getPhoneNumber() != null) {
+            user.setPhoneNumber(updateDTO.getPhoneNumber());
+        }
+
+        User updatedUser = userRepository.save(user);
+
+        // Renvoyer le profil mis à jour
+        return ProfileViewDTO.builder()
+                .id(updatedUser.getId())
+                .email(updatedUser.getEmail())
+                .firstName(updatedUser.getFirstName())
+                .lastName(updatedUser.getLastName())
+                .phoneNumber(updatedUser.getPhoneNumber())
+                .hasProfilePicture(updatedUser.getProfilePicture() != null)
+                .build();
+    }
 
     /**
      * Uploade ou met à jour la photo de profil d'un utilisateur.
