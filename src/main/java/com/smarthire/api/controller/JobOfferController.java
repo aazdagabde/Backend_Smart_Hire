@@ -2,6 +2,7 @@ package com.smarthire.api.controller;
 
 import com.smarthire.api.dto.JobOfferRequest;
 import com.smarthire.api.dto.JobOfferResponse;
+import com.smarthire.api.service.AIService;
 import com.smarthire.api.service.JobOfferService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class JobOfferController {
 
     private final JobOfferService jobOfferService;
+    private final AIService aiService; // <--- Injection du service IA (OBLIGATOIRE)
 
     // ======================================================
     // ENDPOINTS PUBLICS
@@ -144,6 +146,20 @@ public class JobOfferController {
         } catch (Exception e) {
             return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur serveur", e.getMessage());
         }
+    }
+
+    // --- MÉTHODE POUR L'IA (SPRINT 3) ---
+    @PostMapping("/{id}/analyze-cvs")
+    @PreAuthorize("hasRole('RH') or hasRole('ADMIN')")
+    public ResponseEntity<?> analyzeAllCvs(@PathVariable Long id, Authentication authentication) {
+        // On lance l'analyse
+        aiService.analyzeAllApplications(id, authentication.getName());
+
+        // Réponse JSON manuelle
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Analyse IA lancée en arrière-plan. Les résultats apparaîtront progressivement.");
+        return ResponseEntity.ok(response);
     }
 
 
