@@ -18,7 +18,7 @@ COPY src/ src/
 
 # Construit l'application et crée le .jar
 # -DskipTests accélère la construction en sautant les tests
-RUN mvn package -DskipTests
+RUN mvn package -DskipTests -Dmaven.javadoc.skip=true
 
 # ----- ÉTAPE 2: Exécution (Run) -----
 # Utilise une image JRE (Java Runtime) légère basée sur Java 17
