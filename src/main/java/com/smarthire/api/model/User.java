@@ -2,7 +2,7 @@ package com.smarthire.api.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import lombok.Data; // Ou @Getter, @Setter, @NoArgsConstructor, @AllArgsConstructor
+import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -10,17 +10,20 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+// NOUVEL IMPORT NÉCESSAIRE POUR FetchType.LAZY
+import jakarta.persistence.FetchType;
+
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Data // Génère getters, setters, toString, equals, hashCode
-@Builder // Un pattern de design utile pour créer des objets
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "users") // "user" est souvent un mot-clé réservé en SQL
+@Table(name = "users")
 public class User implements UserDetails {
 
     @Id
@@ -35,11 +38,35 @@ public class User implements UserDetails {
 
     private String password;
 
-    // NOUVELLE MODIFICATION
-    @Column(nullable = true) // On le met nullable
+    @Column(nullable = true)
     private String phoneNumber;
 
-    @ManyToMany(fetch = FetchType.EAGER) // Charger les rôles immédiatement
+    // --- SECTION PHOTO DE PROFIL (MODIFIÉE ET CORRIGÉE) ---
+
+    /**
+     * Les données binaires de l'image.
+     * @Lob - Indique que c'est un Large Object.
+     * @Basic(fetch = FetchType.LAZY) - TRÈS IMPORTANT: Pour la performance.
+     * Ne charge pas l'image de la BDD sauf si on appelle user.getProfilePicture().
+     * @Column(...) - Identique à votre configuration pour les CV.
+     * Doit être 'nullable' car un utilisateur peut ne pas avoir de photo.
+     */
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(nullable = true, columnDefinition = "LONGBLOB")
+    private byte[] profilePicture; // Nom corrigé
+
+    /**
+     * Le type MIME de l'image (ex: "image/jpeg" ou "image/png").
+     * Nécessaire pour que le navigateur sache comment afficher l'image.
+     */
+    @Column(nullable = true)
+    private String profilePictureType; // Nom corrigé
+
+    // --- FIN SECTION PHOTO DE PROFIL ---
+
+
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -47,27 +74,23 @@ public class User implements UserDetails {
     )
     private Set<Role> roles;
 
-    // --- AJOUTER CETTE SECTION ---
-    // Relation: Un utilisateur (RH) peut créer plusieurs offres
     @OneToMany(
-            mappedBy = "createdBy", // "createdBy" est le nom du champ dans JobOffer.java
-            cascade = CascadeType.ALL, // Si on supprime un User, ses offres sont supprimées
+            mappedBy = "createdBy",
+            cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    @com.fasterxml.jackson.annotation.JsonIgnore // Évite les boucles infinies lors de la sérialisation
-    private Set<JobOffer> jobOffers = new java.util.HashSet<>();
+    @JsonIgnore
+    private Set<JobOffer> jobOffers = new HashSet<>();
 
-    // NOUVELLE RELATION : Un utilisateur (Candidat) peut avoir plusieurs candidatures
     @OneToMany(mappedBy = "applicant", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonIgnore // Important pour éviter les boucles JSON
+    @JsonIgnore
     private Set<Application> applications = new HashSet<>();
-    // --- FIN DE L'AJOUT ---
+
 
     // --- Méthodes de UserDetails ---
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Transforme notre Set<Role> en une collection de SimpleGrantedAuthority
         return roles.stream()
                 .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .collect(Collectors.toList());
@@ -80,27 +103,26 @@ public class User implements UserDetails {
 
     @Override
     public String getUsername() {
-        // Notre "username" est l'email
         return email;
     }
 
     @Override
     public boolean isAccountNonExpired() {
-        return true; // Par défaut, le compte n'expire pas
+        return true;
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return true; // Par défaut, le compte n'est pas verrouillé
+        return true;
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return true; // Par défaut, les identifiants n'expirent pas
+        return true;
     }
 
     @Override
     public boolean isEnabled() {
-        return true; // Par défaut, le compte est activé
+        return true;
     }
 }

@@ -56,7 +56,6 @@ public class JobOffer {
     @JsonIgnore // Important pour éviter les boucles JSON
     private Set<Application> applications = new HashSet<>();
 
-    // NOUVELLE MODIFICATION : Une offre peut avoir plusieurs champs de formulaire personnalisés
     // (Assurez-vous que l'entité CustomFormField est bien créée)
     @OneToMany(mappedBy = "jobOffer", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore

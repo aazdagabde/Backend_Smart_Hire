@@ -35,75 +35,75 @@ public class AuthService {
 
     @Transactional
     public void register(RegisterRequest request) {
-        // Validation des données d'entrée
         validateRegisterRequest(request);
 
-        // Vérifier si l'email existe déjà
         if (userRepository.existsByEmail(request.email())) {
-            throw new IllegalArgumentException("Erreur: Email déjà utilisé!");
+            throw new IllegalArgumentException("Cet email est déjà utilisé");
         }
 
-        // Créer le nouvel utilisateur
-        User user = User.builder()
-                .firstName(request.firstName().trim())
-                .lastName(request.lastName().trim())
-                .email(request.email().toLowerCase().trim())
-                .password(passwordEncoder.encode(request.password()))
-                .phoneNumber(request.phoneNumber()) // NOUVELLE MODIFICATION
-                .build();
-
-        // Assigner un rôle par défaut
+        // Assigner le rôle "ROLE_CANDIDAT" par défaut (basé sur DataInitializer)
         Role userRole = roleRepository.findByName("ROLE_CANDIDAT")
-                .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CANDIDAT").build()));
-
+                .orElseThrow(() -> new RuntimeException("Erreur: Rôle 'ROLE_CANDIDAT' non trouvé."));
         Set<Role> roles = new HashSet<>();
         roles.add(userRole);
-        user.setRoles(roles);
 
-        // Sauvegarder l'utilisateur
+        User user = User.builder()
+                .firstName(request.firstName())
+                .lastName(request.lastName())
+                .email(request.email())
+                .password(passwordEncoder.encode(request.password()))
+                .phoneNumber(request.phoneNumber()) // Gère le numéro de téléphone optionnel
+                .roles(roles)
+                .build();
+
         userRepository.save(user);
     }
 
+    @Transactional
     public LoginResponse login(LoginRequest request) {
-        // Validation des données d'entrée
         validateLoginRequest(request);
 
         try {
-            // Authentifier l'utilisateur via Spring Security
+            // 1. Authentifier l'utilisateur via Spring Security
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.email().toLowerCase().trim(),
-                            request.password()
-                    )
+                    new UsernamePasswordAuthenticationToken(request.email(), request.password())
             );
 
-            // Mettre l'authentification dans le contexte de sécurité
+            // 2. Placer l'authentification dans le contexte de sécurité
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Générer le token JWT
-            String jwt = jwtProvider.generateToken(authentication.getName());
+            // 3. Récupérer l'utilisateur depuis la BDD (nécessaire pour la réponse)
+            User user = userRepository.findByEmail(request.email())
+                    .orElseThrow(() -> new UsernameNotFoundException("Utilisateur introuvable"));
 
-            // Récupérer les détails de l'utilisateur pour la réponse
-            User userDetails = userRepository.findByEmail(request.email().toLowerCase().trim())
-                    .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé: " + request.email()));
+            // 4. Générer le token
+            String token = jwtProvider.generateToken(authentication);
 
-            List<String> roles = userDetails.getAuthorities().stream()
-                    .map(item -> item.getAuthority())
+            // 5. Récupérer les noms des rôles pour la réponse
+            List<String> roles = user.getRoles().stream()
+                    .map(Role::getName)
                     .collect(Collectors.toList());
 
-            // Construire et retourner la réponse
+            // 6. Construire la réponse
+            // --- CORRECTION APPLIQUÉE ICI ---
+            // Remplacement du .builder() par le constructeur du record
             return new LoginResponse(
-                    jwt,
-                    userDetails.getId(),
-                    userDetails.getEmail(),
-                    userDetails.getFirstName(),
-                    userDetails.getLastName(),
+                    token,              // Le 'jwt'
+                    user.getId(),       // Le 'id' manquant
+                    user.getEmail(),
+                    user.getFirstName(),// Le 'firstName' manquant
+                    user.getLastName(), // Le 'lastName' manquant
                     roles
             );
+            // --- FIN DE LA CORRECTION ---
+
         } catch (Exception e) {
+            // Si l'authentification échoue, une exception est levée
             throw new IllegalArgumentException("Email ou mot de passe incorrect");
         }
     }
+
+    // --- Méthodes de validation (inchangées) ---
 
     private void validateRegisterRequest(RegisterRequest request) {
         if (request.firstName() == null || request.firstName().trim().isEmpty()) {
