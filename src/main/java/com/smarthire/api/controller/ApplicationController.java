@@ -17,9 +17,11 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.smarthire.api.service.AIService; // Importez le nouveau service
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -32,6 +34,7 @@ import java.util.Map;
 public class ApplicationController {
 
     private final ApplicationService applicationService;
+    private final AIService aiService;
 
     // ... (endpoints existants: applyToOffer, getMyApplications, getApplicationsForOffer) ...
     // >>> ASSUREZ-VOUS QUE LES ENDPOINTS EXISTANTS SONT PRÉSENTS ICI <<<
@@ -229,6 +232,17 @@ public class ApplicationController {
         }
     }
 
+    //endpoint pour analyser les cv
+    @PostMapping("/{id}/analyze-cvs")
+    public ResponseEntity<?> analyzeAllCvs(@PathVariable Long id, Authentication authentication) {
+        // On lance l'analyse (c'est une méthode @Async, donc ça répondra tout de suite)
+        aiService.analyzeAllApplications(id, authentication.getName());
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Analyse IA lancée en arrière-plan. Les résultats apparaîtront progressivement."
+        ));
+    }
 
     // --- Méthodes utilitaires ---
 
