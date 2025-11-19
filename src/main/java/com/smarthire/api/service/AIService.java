@@ -120,6 +120,51 @@ public class AIService {
         );
     }
 
+
+    /**
+     * Génère un résumé détaillé et une justification de la note.
+     */
+    public String generateCandidateSummary(Long applicationId, String userEmail) {
+        Application app = applicationService.getApplicationCv(applicationId, userEmail);
+        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
+        JobOffer offer = app.getJobOffer();
+
+        String prompt = String.format("""
+            Agis comme un expert RH.
+            OFFRE : %s
+            CANDIDAT (CV) : %s
+            
+            Tâche : Rédige un résumé professionnel du profil du candidat (3-4 lignes) et justifie précisément la note (points forts/faibles) par rapport à l'offre.
+            Format : Texte brut, professionnel, prêt à être lu par un recruteur.
+            """, offer.getTitle(), cvText != null ? cvText.substring(0, Math.min(cvText.length(), 15000)) : "");
+
+        String response = chatLanguageModel.generate(prompt);
+        applicationService.saveAiSummary(applicationId, response); // Sauvegarde
+        return response;
+    }
+
+    /**
+     * Génère des questions d'entretien personnalisées.
+     */
+    public String generateInterviewQuestions(Long applicationId, String userEmail) {
+        Application app = applicationService.getApplicationCv(applicationId, userEmail);
+        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
+        JobOffer offer = app.getJobOffer();
+
+        String prompt = String.format("""
+            Agis comme un expert RH préparant un entretien.
+            OFFRE : %s
+            CANDIDAT (CV) : %s
+            
+            Tâche : Propose 5 questions d'entretien techniques et comportementales PERTINENTES et CIBLÉES sur les zones d'ombre ou les points forts de ce CV spécifique.
+            Format : Liste numérotée.
+            """, offer.getTitle(), cvText != null ? cvText.substring(0, Math.min(cvText.length(), 15000)) : "");
+
+        String response = chatLanguageModel.generate(prompt);
+        applicationService.saveAiInterviewQuestions(applicationId, response); // Sauvegarde
+        return response;
+    }
+
     // --- Méthodes utilitaires pour extraire les infos du JSON (Regex simple pour éviter une lib en plus) ---
 
     private Integer parseScore(String text) {
