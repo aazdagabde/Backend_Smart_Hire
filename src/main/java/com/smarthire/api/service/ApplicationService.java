@@ -24,7 +24,9 @@ import com.smarthire.api.repository.UserRepository;
 import com.smarthire.api.utils.PdfUtils;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.hibernate.validator.internal.util.stereotypes.Lazy;
+// CORRECTION 1 : Import Spring correct pour @Lazy
+import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +53,10 @@ public class ApplicationService {
 
     private final long MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
 
-    private final AIService aiService;
+    // CORRECTION 2 : Injection via @Autowired + @Lazy pour briser le cycle (et retrait de final)
+    @Autowired
+    @Lazy
+    private AIService aiService;
 
     // 1. POSTULER À UNE OFFRE
     @Transactional
@@ -320,9 +325,6 @@ public class ApplicationService {
         // Retourner la liste mise à jour
         return sortedApps.stream().map(ApplicationResponse::fromEntity).collect(Collectors.toList());
     }
-
-
-
 
     @Transactional
     public String generateAiSummary(Long applicationId, String userEmail) {
