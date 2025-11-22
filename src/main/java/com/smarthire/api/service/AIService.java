@@ -10,6 +10,7 @@ import dev.langchain4j.model.chat.ChatLanguageModel;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -23,8 +24,14 @@ public class AIService {
 
     private static final Logger logger = LoggerFactory.getLogger(AIService.class);
 
-    private final ApplicationService applicationService;
+    private ApplicationService applicationService;
+
     private final ChatLanguageModel chatLanguageModel; // Injecté automatiquement par LangChain4j
+
+    @Autowired
+    public void setApplicationService(ApplicationService applicationService) {
+        this.applicationService = applicationService;
+    }
 
     /**
      * Analyse toutes les candidatures pour une offre donnée de manière asynchrone.
@@ -118,6 +125,48 @@ public class AIService {
                 offer.getDescription(),
                 safeCvText
         );
+    }
+
+
+    /**
+     * Génère un résumé détaillé et une justification de la note.
+     * CORRECTION : Prend maintenant JobOffer et String en entrée. Ne fait plus d'appels DB.
+     */
+    public String generateCandidateSummary(JobOffer offer, String cvText) {
+        // Précautions sur la taille du texte
+        String safeCvText = cvText != null ? cvText.substring(0, Math.min(cvText.length(), 15000)) : "";
+
+        String prompt = String.format("""
+            Agis comme un expert RH.
+            OFFRE : %s
+            DESCRIPTION OFFRE : %s
+            CANDIDAT (CV) : %s
+            
+            Tâche : Rédige un résumé professionnel du profil du candidat (3-4 lignes) et justifie précisément la note (points forts/faibles) par rapport à l'offre.
+            Format : Texte brut, professionnel, prêt à être lu par un recruteur.
+            """, offer.getTitle(), offer.getDescription(), safeCvText);
+
+        // Retourne simplement la chaîne générée. La sauvegarde est gérée par ApplicationService.
+        return chatLanguageModel.generate(prompt);
+    }
+
+    /**
+     * Génère des questions d'entretien personnalisées.
+     * CORRECTION : Prend maintenant JobOffer et String en entrée. Ne fait plus d'appels DB.
+     */
+    public String generateInterviewQuestions(JobOffer offer, String cvText) {
+        String safeCvText = cvText != null ? cvText.substring(0, Math.min(cvText.length(), 15000)) : "";
+
+        String prompt = String.format("""
+            Agis comme un expert RH préparant un entretien.
+            OFFRE : %s
+            CANDIDAT (CV) : %s
+            
+            Tâche : Propose 5 questions d'entretien techniques et comportementales PERTINENTES et CIBLÉES sur les zones d'ombre ou les points forts de ce CV spécifique.
+            Format : Liste numérotée.
+            """, offer.getTitle(), safeCvText);
+
+        return chatLanguageModel.generate(prompt);
     }
 
     // --- Méthodes utilitaires pour extraire les infos du JSON (Regex simple pour éviter une lib en plus) ---

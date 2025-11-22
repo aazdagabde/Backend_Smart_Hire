@@ -21,8 +21,12 @@ import com.smarthire.api.repository.ApplicationRepository;
 import com.smarthire.api.repository.CustomFormFieldRepository;
 import com.smarthire.api.repository.JobOfferRepository;
 import com.smarthire.api.repository.UserRepository;
+import com.smarthire.api.utils.PdfUtils;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+// CORRECTION 1 : Import Spring correct pour @Lazy
+import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +34,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -46,6 +52,11 @@ public class ApplicationService {
     private final ObjectMapper objectMapper;
 
     private final long MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
+
+    // CORRECTION 2 : Injection via @Autowired + @Lazy pour briser le cycle (et retrait de final)
+    @Autowired
+    @Lazy
+    private AIService aiService;
 
     // 1. POSTULER À UNE OFFRE
     @Transactional
@@ -265,6 +276,103 @@ public class ApplicationService {
 
         Application updatedApplication = applicationRepository.save(application);
         return ApplicationResponse.fromEntity(updatedApplication);
+    }
+
+    // 10.
+    @Transactional
+    public List<ApplicationResponse> selectTopCandidates(Long offerId, int topN, String rhEmail) {
+        // 1. Vérifier RH et Offre
+        User rhUser = userRepository.findByEmail(rhEmail)
+                .orElseThrow(() -> new EntityNotFoundException("Recruteur non trouvé."));
+        JobOffer offer = jobOfferRepository.findById(offerId)
+                .orElseThrow(() -> new EntityNotFoundException("Offre non trouvée."));
+
+        if (!offer.getCreatedBy().equals(rhUser)) {
+            throw new AccessDeniedException("Non autorisé.");
+        }
+
+        // 2. Vérifier la date limite (Règle métier demandée)
+        if (offer.getDeadline() != null && LocalDate.now().isBefore(offer.getDeadline())) {
+            throw new IllegalStateException("Impossible de classer les candidats avant la date limite : " + offer.getDeadline());
+        }
+
+        // 3. Récupérer tous les candidats de l'offre
+        List<Application> allApps = applicationRepository.findByJobOfferId(offerId);
+
+        // 4. Trier par score décroissant (les nulls à la fin)
+        List<Application> sortedApps = allApps.stream()
+                .sorted(Comparator.comparing(Application::getCvScore, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .collect(Collectors.toList());
+
+        // 5. Appliquer la logique "Top N Acceptés, Reste Rejetés"
+        for (int i = 0; i < sortedApps.size(); i++) {
+            Application app = sortedApps.get(i);
+            // On ne touche pas aux candidats déjà traités si on veut,
+            // mais ici la demande est stricte : N premiers acceptés, autres rejetés.
+            if (app.getStatus() == ApplicationStatus.PENDING || app.getStatus() == ApplicationStatus.REVIEWED) {
+                if (i < topN) {
+                    app.setStatus(ApplicationStatus.ACCEPTED);
+                    if (app.getCandidateMessage() == null) {
+                        app.setCandidateMessage("Félicitations ! Votre profil fait partie de notre sélection prioritaire.");
+                    }
+                } else {
+                    app.setStatus(ApplicationStatus.REJECTED);
+                }
+                applicationRepository.save(app);
+            }
+        }
+
+        // Retourner la liste mise à jour
+        return sortedApps.stream().map(ApplicationResponse::fromEntity).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public String generateAiSummary(Long applicationId, String userEmail) {
+        Application app = getApplicationCv(applicationId, userEmail); // Réutilise votre méthode existante de vérification sécu
+
+        // Si déjà généré, on retourne directement (optionnel, retirez le if pour régénérer à chaque fois)
+        if (app.getAiSummary() != null && !app.getAiSummary().isEmpty()) {
+            return app.getAiSummary();
+        }
+
+        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
+        String summary = aiService.generateCandidateSummary(app.getJobOffer(), cvText);
+
+        app.setAiSummary(summary);
+        applicationRepository.save(app);
+        return summary;
+    }
+
+    @Transactional
+    public String generateAiInterviewQuestions(Long applicationId, String userEmail) {
+        Application app = getApplicationCv(applicationId, userEmail);
+
+        if (app.getAiInterviewQuestions() != null && !app.getAiInterviewQuestions().isEmpty()) {
+            return app.getAiInterviewQuestions();
+        }
+
+        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
+
+        String questions = aiService.generateInterviewQuestions(app.getJobOffer(), cvText);
+
+        app.setAiInterviewQuestions(questions);
+        applicationRepository.save(app);
+        return questions;
+    }
+
+    // --- Méthodes pour sauvegarder les données IA (étape 4) ---
+    @Transactional
+    public void saveAiSummary(Long applicationId, String summary) {
+        Application app = applicationRepository.findById(applicationId).orElseThrow();
+        app.setAiSummary(summary);
+        applicationRepository.save(app);
+    }
+
+    @Transactional
+    public void saveAiInterviewQuestions(Long applicationId, String questions) {
+        Application app = applicationRepository.findById(applicationId).orElseThrow();
+        app.setAiInterviewQuestions(questions);
+        applicationRepository.save(app);
     }
 
     // Méthode utilitaire pour factoriser la recherche et la vérification de propriété

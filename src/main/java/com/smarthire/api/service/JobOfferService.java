@@ -71,6 +71,7 @@ public class JobOfferService {
                 .title(request.title())
                 .description(request.description())
                 .location(request.location())
+                .deadline(request.deadline())
                 .contractType(validateContractType(request.contractType()))
                 .status(validateOfferStatus(request.status())) // Valide et utilise le statut fourni
                 .createdBy(hrUser)
@@ -96,6 +97,7 @@ public class JobOfferService {
         offer.setTitle(request.title());
         offer.setDescription(request.description());
         offer.setLocation(request.location());
+        offer.setDeadline(request.deadline());
         offer.setContractType(validateContractType(request.contractType()));
         offer.setStatus(validateOfferStatus(request.status())); // Permet de changer le statut
 
@@ -187,6 +189,7 @@ public class JobOfferService {
                 offer.getTitle(),
                 offer.getDescription(),
                 offer.getLocation(),
+                offer.getDeadline(),
                 offer.getContractType().name(),
                 offer.getStatus().name(),
                 createdById,
