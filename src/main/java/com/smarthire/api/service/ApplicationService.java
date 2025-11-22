@@ -336,7 +336,7 @@ public class ApplicationService {
         }
 
         String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
-        String summary = aiService.generateCandidateSummary(app.getJobOffer().getId(), cvText);
+        String summary = aiService.generateCandidateSummary(app.getJobOffer(), cvText);
 
         app.setAiSummary(summary);
         applicationRepository.save(app);
@@ -353,7 +353,7 @@ public class ApplicationService {
 
         String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
 
-        String questions = aiService.generateInterviewQuestions(app.getJobOffer().getId(), cvText);
+        String questions = aiService.generateInterviewQuestions(app.getJobOffer(), cvText);
 
         app.setAiInterviewQuestions(questions);
         applicationRepository.save(app);
