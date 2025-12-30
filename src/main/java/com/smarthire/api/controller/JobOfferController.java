@@ -163,6 +163,25 @@ public class JobOfferController {
     }
 
 
+    // Ajouter l'injection de ApplicationService si ce n'est pas déjà fait via le constructeur @RequiredArgsConstructor
+    private final com.smarthire.api.service.ApplicationService applicationService;
+
+    @PostMapping("/{id}/select-top/{count}")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> selectTopCandidates(
+            @PathVariable Long id,
+            @PathVariable int count) {
+        try {
+            String hrEmail = getAuthenticatedUserEmail();
+            var results = applicationService.selectTopCandidates(id, count, hrEmail);
+            return ResponseEntity.ok(createSuccessResponse(results, "Top " + count + " candidats sélectionnés, les autres ont été rejetés."));
+        } catch (IllegalStateException e) {
+            return createErrorResponse(HttpStatus.BAD_REQUEST, e.getMessage(), null); // Pour la deadline
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur", e.getMessage());
+        }
+    }
+
     // --- Méthodes utilitaires ---
 
     // Récupère l'email de l'utilisateur authentifié
