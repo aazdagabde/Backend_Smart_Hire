@@ -14,6 +14,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Async
 public class N8nService {
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -53,6 +54,19 @@ public class N8nService {
         payload.put("date", date);
 
         sendWebhook(webhookUrlInviteCandidate, payload);
+    }
+
+    @Async
+    public void triggerCandidateSelected(String candidateName, String candidateEmail, String jobTitle, Double score) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("event", "CANDIDATE_SELECTED");
+        payload.put("candidateName", candidateName);
+        payload.put("candidateEmail", candidateEmail);
+        payload.put("jobTitle", jobTitle);
+        payload.put("score", score != null ? score : "N/A");
+
+        // Utilisation de la méthode générique sendWebhook déjà présente dans votre classe
+        sendWebhook(webhookUrlCandidateSelected, payload);
     }
 
     private void sendWebhook(String url, Map<String, Object> payload) {
