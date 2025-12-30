@@ -21,12 +21,8 @@ import com.smarthire.api.repository.ApplicationRepository;
 import com.smarthire.api.repository.CustomFormFieldRepository;
 import com.smarthire.api.repository.JobOfferRepository;
 import com.smarthire.api.repository.UserRepository;
-import com.smarthire.api.utils.PdfUtils;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-// CORRECTION 1 : Import Spring correct pour @Lazy
-import org.springframework.context.annotation.Lazy;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +30,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -52,11 +47,7 @@ public class ApplicationService {
     private final ObjectMapper objectMapper;
 
     private final long MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
-
-    // CORRECTION 2 : Injection via @Autowired + @Lazy pour briser le cycle (et retrait de final)
-    @Autowired
-    @Lazy
-    private AIService aiService;
+    private final N8nService n8nService; // <--- 1. AJOUTER L'INJECTION ICI
 
     // 1. POSTULER À UNE OFFRE
     @Transactional
@@ -128,6 +119,17 @@ public class ApplicationService {
 
                 applicationCustomDataRepository.save(dataEntry);
             }
+        }
+
+        try {
+            n8nService.triggerApplicationReceived(
+                    candidate.getFirstName() + " " + candidate.getLastName(),
+                    candidate.getEmail(),
+                    jobOffer.getTitle(),
+                    savedApplication.getId()
+            );
+        } catch (Exception e) {
+            System.err.println("Erreur notification n8n: " + e.getMessage());
         }
 
         return ApplicationResponse.fromEntity(savedApplication);
@@ -278,7 +280,7 @@ public class ApplicationService {
         return ApplicationResponse.fromEntity(updatedApplication);
     }
 
-    // 10.
+    // 10. SÉLECTIONNER AUTOMATIQUEMENT LES MEILLEURS CANDIDATS
     @Transactional
     public List<ApplicationResponse> selectTopCandidates(Long offerId, int topN, String rhEmail) {
         // 1. Vérifier RH et Offre
@@ -291,10 +293,10 @@ public class ApplicationService {
             throw new AccessDeniedException("Non autorisé.");
         }
 
-        // 2. Vérifier la date limite (Règle métier demandée)
-        if (offer.getDeadline() != null && LocalDate.now().isBefore(offer.getDeadline())) {
-            throw new IllegalStateException("Impossible de classer les candidats avant la date limite : " + offer.getDeadline());
-        }
+        // 2. Vérifier la date limite (Optionnel, selon vos règles métier)
+        // if (offer.getDeadline() != null && LocalDate.now().isBefore(offer.getDeadline())) {
+        //    throw new IllegalStateException("Impossible de classer les candidats avant la date limite.");
+        // }
 
         // 3. Récupérer tous les candidats de l'offre
         List<Application> allApps = applicationRepository.findByJobOfferId(offerId);
@@ -307,8 +309,8 @@ public class ApplicationService {
         // 5. Appliquer la logique "Top N Acceptés, Reste Rejetés"
         for (int i = 0; i < sortedApps.size(); i++) {
             Application app = sortedApps.get(i);
-            // On ne touche pas aux candidats déjà traités si on veut,
-            // mais ici la demande est stricte : N premiers acceptés, autres rejetés.
+
+            // On ne touche qu'aux statuts "En attente" ou "Examiné"
             if (app.getStatus() == ApplicationStatus.PENDING || app.getStatus() == ApplicationStatus.REVIEWED) {
                 if (i < topN) {
                     app.setStatus(ApplicationStatus.ACCEPTED);
@@ -316,63 +318,38 @@ public class ApplicationService {
                         app.setCandidateMessage("Félicitations ! Votre profil fait partie de notre sélection prioritaire.");
                     }
                 } else {
-                    app.setStatus(ApplicationStatus.REJECTED);
+                    // Optionnel : Rejeter automatiquement les autres
+                    // app.setStatus(ApplicationStatus.REJECTED);
                 }
                 applicationRepository.save(app);
             }
         }
 
-        // Retourner la liste mise à jour
-        return sortedApps.stream().map(ApplicationResponse::fromEntity).collect(Collectors.toList());
+        // Retourner la liste mise à jour pour affichage
+        return sortedApps.stream()
+                .map(ApplicationResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
-    @Transactional
-    public String generateAiSummary(Long applicationId, String userEmail) {
-        Application app = getApplicationCv(applicationId, userEmail); // Réutilise votre méthode existante de vérification sécu
-
-        // Si déjà généré, on retourne directement (optionnel, retirez le if pour régénérer à chaque fois)
-        if (app.getAiSummary() != null && !app.getAiSummary().isEmpty()) {
-            return app.getAiSummary();
-        }
-
-        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
-        String summary = aiService.generateCandidateSummary(app.getJobOffer(), cvText);
-
-        app.setAiSummary(summary);
-        applicationRepository.save(app);
-        return summary;
-    }
 
     @Transactional
-    public String generateAiInterviewQuestions(Long applicationId, String userEmail) {
-        Application app = getApplicationCv(applicationId, userEmail);
+    public void inviteCandidate(Long applicationId, String message, String date, String rhEmail) {
+        // On vérifie que le RH a le droit
+        Application app = findApplicationAndVerifyOwnership(applicationId, rhEmail);
 
-        if (app.getAiInterviewQuestions() != null && !app.getAiInterviewQuestions().isEmpty()) {
-            return app.getAiInterviewQuestions();
-        }
-
-        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
-
-        String questions = aiService.generateInterviewQuestions(app.getJobOffer(), cvText);
-
-        app.setAiInterviewQuestions(questions);
+        // On met à jour le statut (ACCEPTED correspond à "Candidature acceptée pour entretien" dans votre Enum)
+        app.setStatus(ApplicationStatus.ACCEPTED);
+        app.setCandidateMessage(message); // On sauvegarde le message personnalisé
         applicationRepository.save(app);
-        return questions;
-    }
 
-    // --- Méthodes pour sauvegarder les données IA (étape 4) ---
-    @Transactional
-    public void saveAiSummary(Long applicationId, String summary) {
-        Application app = applicationRepository.findById(applicationId).orElseThrow();
-        app.setAiSummary(summary);
-        applicationRepository.save(app);
-    }
-
-    @Transactional
-    public void saveAiInterviewQuestions(Long applicationId, String questions) {
-        Application app = applicationRepository.findById(applicationId).orElseThrow();
-        app.setAiInterviewQuestions(questions);
-        applicationRepository.save(app);
+        // On déclenche le webhook n8n
+        n8nService.triggerInviteCandidate(
+                app.getApplicant().getFirstName(),
+                app.getApplicant().getEmail(),
+                app.getJobOffer().getTitle(),
+                message,
+                date
+        );
     }
 
     // Méthode utilitaire pour factoriser la recherche et la vérification de propriété
