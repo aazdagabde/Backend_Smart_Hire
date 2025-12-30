@@ -12,6 +12,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -36,6 +37,9 @@ public class JobOffer {
 
     @Column(nullable = false)
     private String location;
+
+    @Column(nullable = true)
+    private LocalDate deadline;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

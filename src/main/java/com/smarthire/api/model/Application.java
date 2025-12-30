@@ -64,4 +64,13 @@ public class Application {
     @Lob
     @Column(nullable = true, columnDefinition = "TEXT")
     private String internalNotes; // Notes privées pour le RH
+
+
+    @Lob
+    @Column(nullable = true, columnDefinition = "TEXT")
+    private String aiSummary; // Résumé et justification
+
+    @Lob
+    @Column(nullable = true, columnDefinition = "TEXT")
+    private String aiInterviewQuestions;
 }
