@@ -46,6 +46,7 @@ public class ApplicationService {
     private final ObjectMapper objectMapper;
 
     private final long MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
+    private final N8nService n8nService; // <--- 1. AJOUTER L'INJECTION ICI
 
     // 1. POSTULER À UNE OFFRE
     @Transactional
@@ -117,6 +118,17 @@ public class ApplicationService {
 
                 applicationCustomDataRepository.save(dataEntry);
             }
+        }
+
+        try {
+            n8nService.triggerApplicationReceived(
+                    candidate.getFirstName() + " " + candidate.getLastName(),
+                    candidate.getEmail(),
+                    jobOffer.getTitle(),
+                    savedApplication.getId()
+            );
+        } catch (Exception e) {
+            System.err.println("Erreur notification n8n: " + e.getMessage());
         }
 
         return ApplicationResponse.fromEntity(savedApplication);
@@ -265,6 +277,27 @@ public class ApplicationService {
 
         Application updatedApplication = applicationRepository.save(application);
         return ApplicationResponse.fromEntity(updatedApplication);
+    }
+
+
+    @Transactional
+    public void inviteCandidate(Long applicationId, String message, String date, String rhEmail) {
+        // On vérifie que le RH a le droit
+        Application app = findApplicationAndVerifyOwnership(applicationId, rhEmail);
+
+        // On met à jour le statut (ACCEPTED correspond à "Candidature acceptée pour entretien" dans votre Enum)
+        app.setStatus(ApplicationStatus.ACCEPTED);
+        app.setCandidateMessage(message); // On sauvegarde le message personnalisé
+        applicationRepository.save(app);
+
+        // On déclenche le webhook n8n
+        n8nService.triggerInviteCandidate(
+                app.getApplicant().getFirstName(),
+                app.getApplicant().getEmail(),
+                app.getJobOffer().getTitle(),
+                message,
+                date
+        );
     }
 
     // Méthode utilitaire pour factoriser la recherche et la vérification de propriété

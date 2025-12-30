@@ -244,6 +244,31 @@ public class ApplicationController {
         ));
     }
 
+
+    //  CLASSE INTERNE (DTO)
+    public static class InviteRequest {
+        public String message;
+        public String date;
+    }
+
+    @PostMapping("/{applicationId}/invite")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> inviteCandidate(
+            @PathVariable Long applicationId,
+            @RequestBody InviteRequest request) {
+        try {
+            String rhEmail = getAuthenticatedUserEmail();
+            applicationService.inviteCandidate(applicationId, request.message, request.date, rhEmail);
+            return ResponseEntity.ok(createSuccessResponse(null, "Invitation envoyée et statut mis à jour."));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur invitation", e.getMessage());
+        }
+    }
+
     // --- Méthodes utilitaires ---
 
     private String getAuthenticatedUserEmail() {
