@@ -269,6 +269,29 @@ public class ApplicationController {
         }
     }
 
+    /**
+     * Endpoint pour sélectionner automatiquement les N meilleurs candidats.
+     * URL : POST /api/applications/offer/{offerId}/select-top?n=3
+     */
+    @PostMapping("/offer/{offerId}/select-top")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> selectTopCandidates(
+            @PathVariable Long offerId,
+            @RequestParam(defaultValue = "3") int n) { // "n" est le nombre de candidats (ex: 3)
+        try {
+            String rhEmail = getAuthenticatedUserEmail();
+            List<ApplicationResponse> topCandidates = applicationService.selectTopCandidates(offerId, n, rhEmail);
+            return ResponseEntity.ok(createSuccessResponse(topCandidates,
+                    "Sélection effectuée : Les " + n + " meilleurs profils ont été acceptés."));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la sélection.", e.getMessage());
+        }
+    }
+
     // --- Méthodes utilitaires ---
 
     private String getAuthenticatedUserEmail() {

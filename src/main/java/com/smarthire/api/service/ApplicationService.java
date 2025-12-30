@@ -30,6 +30,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -277,6 +278,57 @@ public class ApplicationService {
 
         Application updatedApplication = applicationRepository.save(application);
         return ApplicationResponse.fromEntity(updatedApplication);
+    }
+
+    // 10. SÉLECTIONNER AUTOMATIQUEMENT LES MEILLEURS CANDIDATS
+    @Transactional
+    public List<ApplicationResponse> selectTopCandidates(Long offerId, int topN, String rhEmail) {
+        // 1. Vérifier RH et Offre
+        User rhUser = userRepository.findByEmail(rhEmail)
+                .orElseThrow(() -> new EntityNotFoundException("Recruteur non trouvé."));
+        JobOffer offer = jobOfferRepository.findById(offerId)
+                .orElseThrow(() -> new EntityNotFoundException("Offre non trouvée."));
+
+        if (!offer.getCreatedBy().equals(rhUser)) {
+            throw new AccessDeniedException("Non autorisé.");
+        }
+
+        // 2. Vérifier la date limite (Optionnel, selon vos règles métier)
+        // if (offer.getDeadline() != null && LocalDate.now().isBefore(offer.getDeadline())) {
+        //    throw new IllegalStateException("Impossible de classer les candidats avant la date limite.");
+        // }
+
+        // 3. Récupérer tous les candidats de l'offre
+        List<Application> allApps = applicationRepository.findByJobOfferId(offerId);
+
+        // 4. Trier par score décroissant (les nulls à la fin)
+        List<Application> sortedApps = allApps.stream()
+                .sorted(Comparator.comparing(Application::getCvScore, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .collect(Collectors.toList());
+
+        // 5. Appliquer la logique "Top N Acceptés, Reste Rejetés"
+        for (int i = 0; i < sortedApps.size(); i++) {
+            Application app = sortedApps.get(i);
+
+            // On ne touche qu'aux statuts "En attente" ou "Examiné"
+            if (app.getStatus() == ApplicationStatus.PENDING || app.getStatus() == ApplicationStatus.REVIEWED) {
+                if (i < topN) {
+                    app.setStatus(ApplicationStatus.ACCEPTED);
+                    if (app.getCandidateMessage() == null) {
+                        app.setCandidateMessage("Félicitations ! Votre profil fait partie de notre sélection prioritaire.");
+                    }
+                } else {
+                    // Optionnel : Rejeter automatiquement les autres
+                    // app.setStatus(ApplicationStatus.REJECTED);
+                }
+                applicationRepository.save(app);
+            }
+        }
+
+        // Retourner la liste mise à jour pour affichage
+        return sortedApps.stream()
+                .map(ApplicationResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
 
