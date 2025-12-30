@@ -281,57 +281,73 @@ public class ApplicationService {
     }
 
     // 10. SÉLECTIONNER AUTOMATIQUEMENT LES MEILLEURS CANDIDATS
+// 10. SÉLECTIONNER AUTOMATIQUEMENT LES MEILLEURS CANDIDATS
     @Transactional
     public List<ApplicationResponse> selectTopCandidates(Long offerId, int topN, String rhEmail) {
         // 1. Vérifier RH et Offre
         User rhUser = userRepository.findByEmail(rhEmail)
                 .orElseThrow(() -> new EntityNotFoundException("Recruteur non trouvé."));
+
         JobOffer offer = jobOfferRepository.findById(offerId)
                 .orElseThrow(() -> new EntityNotFoundException("Offre non trouvée."));
 
+        // Sécurité : Vérifier que le RH est bien le propriétaire
         if (!offer.getCreatedBy().equals(rhUser)) {
-            throw new AccessDeniedException("Non autorisé.");
+            throw new AccessDeniedException("Vous n'êtes pas autorisé à modifier cette offre.");
         }
 
-        // 2. Vérifier la date limite (Optionnel, selon vos règles métier)
-        // if (offer.getDeadline() != null && LocalDate.now().isBefore(offer.getDeadline())) {
-        //    throw new IllegalStateException("Impossible de classer les candidats avant la date limite.");
-        // }
-
-        // 3. Récupérer tous les candidats de l'offre
+        // 2. Récupérer tous les candidats de l'offre
         List<Application> allApps = applicationRepository.findByJobOfferId(offerId);
 
-        // 4. Trier par score décroissant (les nulls à la fin)
+        // 3. Trier par score décroissant (les nulls à la fin)
         List<Application> sortedApps = allApps.stream()
                 .sorted(Comparator.comparing(Application::getCvScore, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .collect(Collectors.toList());
 
-        // 5. Appliquer la logique "Top N Acceptés, Reste Rejetés"
-        for (int i = 0; i < sortedApps.size(); i++) {
-            Application app = sortedApps.get(i);
+        // 4. Appliquer la logique "Top N Acceptés" + Notification n8n
+        int countSelected = 0;
 
-            // On ne touche qu'aux statuts "En attente" ou "Examiné"
-            if (app.getStatus() == ApplicationStatus.PENDING || app.getStatus() == ApplicationStatus.REVIEWED) {
-                if (i < topN) {
+        for (Application app : sortedApps) {
+            // On ne traite que ceux qui n'ont pas encore été rejetés ou acceptés manuellement (optionnel, selon votre logique)
+            // Ici, on considère qu'on peut repêcher n'importe qui pour le Top N
+
+            if (countSelected < topN) {
+                // --- SÉLECTIONNER ---
+                if (app.getStatus() != ApplicationStatus.ACCEPTED) { // Éviter de renvoyer un mail si déjà accepté
                     app.setStatus(ApplicationStatus.ACCEPTED);
+
                     if (app.getCandidateMessage() == null) {
-                        app.setCandidateMessage("Félicitations ! Votre profil fait partie de notre sélection prioritaire.");
+                        app.setCandidateMessage("Félicitations ! Votre profil a été sélectionné parmi les meilleurs candidats.");
                     }
-                } else {
-                    // Optionnel : Rejeter automatiquement les autres
-                    // app.setStatus(ApplicationStatus.REJECTED);
+
+                    applicationRepository.save(app);
+
+                    // --- APPEL N8N (Notification) ---
+                    try {
+                        n8nService.triggerCandidateSelected(
+                                app.getApplicant().getFirstName(),
+                                app.getApplicant().getEmail(),
+                                offer.getTitle(),
+                                app.getCvScore()
+                        );
+                    } catch (Exception e) {
+                        // On log l'erreur sans bloquer la transaction
+                        System.err.println("⚠️ Echec envoi n8n pour " + app.getApplicant().getEmail() + ": " + e.getMessage());
+                    }
                 }
-                applicationRepository.save(app);
+                countSelected++;
+            } else {
+                // --- (Optionnel) REJETER LES AUTRES ---
+                // app.setStatus(ApplicationStatus.REJECTED);
+                // applicationRepository.save(app);
             }
         }
 
-        // Retourner la liste mise à jour pour affichage
+        // Retourner la liste mise à jour (rechargée depuis la base ou juste la liste triée modifiée)
         return sortedApps.stream()
                 .map(ApplicationResponse::fromEntity)
                 .collect(Collectors.toList());
     }
-
-
     @Transactional
     public void inviteCandidate(Long applicationId, String message, String date, String rhEmail) {
         // On vérifie que le RH a le droit
