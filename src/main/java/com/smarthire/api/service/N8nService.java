@@ -66,7 +66,7 @@ public class N8nService {
         payload.put("score", score != null ? score : "N/A");
 
         // Utilisation de la méthode générique sendWebhook déjà présente dans votre classe
-        sendWebhook(webhookUrlCandidateSelected, payload);
+        //sendWebhook(webhookUrlCandidateSelected, payload);
     }
 
     private void sendWebhook(String url, Map<String, Object> payload) {

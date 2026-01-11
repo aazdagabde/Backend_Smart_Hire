@@ -73,4 +73,5 @@ public class Application {
     @Lob
     @Column(nullable = true, columnDefinition = "TEXT")
     private String aiInterviewQuestions;
+
 }
