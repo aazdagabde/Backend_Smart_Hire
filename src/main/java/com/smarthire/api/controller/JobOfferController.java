@@ -8,13 +8,16 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication; // Importer Authentication
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -180,6 +183,26 @@ public class JobOfferController {
         } catch (Exception e) {
             return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur", e.getMessage());
         }
+    }
+
+    @PutMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Void> uploadOfferImage(@PathVariable Long id, @RequestParam("file") MultipartFile file) throws IOException, IOException {
+        jobOfferService.uploadOfferImage(id, file);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping(value = "/{id}/image", produces = {MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE})
+    public ResponseEntity<byte[]> getOfferImage(@PathVariable Long id) {
+        byte[] imageData = jobOfferService.getOfferImage(id);
+        String contentType = jobOfferService.getOfferImageContentType(id);
+
+        if (imageData == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .body(imageData);
     }
 
     // --- Méthodes utilitaires ---
