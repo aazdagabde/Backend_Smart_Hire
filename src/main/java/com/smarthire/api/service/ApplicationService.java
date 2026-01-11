@@ -21,8 +21,11 @@ import com.smarthire.api.repository.ApplicationRepository;
 import com.smarthire.api.repository.CustomFormFieldRepository;
 import com.smarthire.api.repository.JobOfferRepository;
 import com.smarthire.api.repository.UserRepository;
+import com.smarthire.api.utils.PdfUtils;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +48,9 @@ public class ApplicationService {
     private final ApplicationCustomDataRepository applicationCustomDataRepository;
     private final CustomFormFieldRepository customFormFieldRepository;
     private final ObjectMapper objectMapper;
+    @Autowired
+    @Lazy
+    private AIService aiService;
 
     private final long MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
     private final N8nService n8nService; // <--- 1. AJOUTER L'INJECTION ICI
@@ -366,6 +372,42 @@ public class ApplicationService {
                 message,
                 date
         );
+    }
+
+
+
+    @Transactional
+    public String generateAiSummary(Long applicationId, String userEmail) {
+        Application app = getApplicationCv(applicationId, userEmail); // Réutilise votre méthode existante de vérification sécu
+
+        // Si déjà généré, on retourne directement (optionnel, retirez le if pour régénérer à chaque fois)
+        if (app.getAiSummary() != null && !app.getAiSummary().isEmpty()) {
+            return app.getAiSummary();
+        }
+
+        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
+        String summary = aiService.generateCandidateSummary(app.getJobOffer(), cvText);
+
+        app.setAiSummary(summary);
+        applicationRepository.save(app);
+        return summary;
+    }
+
+    @Transactional
+    public String generateAiInterviewQuestions(Long applicationId, String userEmail) {
+        Application app = getApplicationCv(applicationId, userEmail);
+
+        if (app.getAiInterviewQuestions() != null && !app.getAiInterviewQuestions().isEmpty()) {
+            return app.getAiInterviewQuestions();
+        }
+
+        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
+
+        String questions = aiService.generateInterviewQuestions(app.getJobOffer(), cvText);
+
+        app.setAiInterviewQuestions(questions);
+        applicationRepository.save(app);
+        return questions;
     }
 
     // Méthode utilitaire pour factoriser la recherche et la vérification de propriété

@@ -211,7 +211,44 @@ public class ApplicationController {
     }
 
 
-    // --- NOUVEL ENDPOINT (Amélioration 3) ---
+
+    // Endpoint pour générer un résumé du profil candidat par IA
+    @PostMapping("/{id}/ai-summary")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> generateAiSummary(@PathVariable Long id) {
+        try {
+            String userEmail = getAuthenticatedUserEmail();
+            // Appel à la méthode correspondante dans ApplicationService
+            String summary = applicationService.generateAiSummary(id, userEmail);
+            return ResponseEntity.ok(createSuccessResponse(summary, "Résumé généré avec succès"));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la génération du résumé", e.getMessage());
+        }
+    }
+
+    // Endpoint pour générer des questions d'entretien par IA
+    @PostMapping("/{id}/ai-questions")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> generateAiQuestions(@PathVariable Long id) {
+        try {
+            String userEmail = getAuthenticatedUserEmail();
+            // Appel à la méthode correspondante dans ApplicationService
+            String questions = applicationService.generateAiInterviewQuestions(id, userEmail);
+            return ResponseEntity.ok(createSuccessResponse(questions, "Questions générées avec succès"));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (AccessDeniedException e) {
+            return createErrorResponse(HttpStatus.FORBIDDEN, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la génération des questions", e.getMessage());
+        }
+    }
+
+
 
     // Endpoint : Mettre à jour les notes internes (RH)
     @PutMapping("/{applicationId}/notes")
