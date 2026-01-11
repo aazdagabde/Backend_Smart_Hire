@@ -12,22 +12,22 @@ import java.util.List;
 @Repository
 public interface JobOfferRepository extends JpaRepository<JobOffer, Long> {
 
-    // Trouver toutes les offres par statut (pour la vue publique)
+    // Trouver toutes les offres par statut
     List<JobOffer> findByStatus(OfferStatus status);
 
-    // Trouver toutes les offres créées par un utilisateur spécifique (pour le tableau de bord RH)
+    // Trouver toutes les offres créées par un utilisateur
     List<JobOffer> findByCreatedById(Long userId);
 
-    // NOUVELLE MÉTHODE (CORRIGÉE)
-    // Nous allons passer un terme de recherche déjà en minuscules et avec des wildcards
-    // La recherche sur 'description' (TEXT/CLOB) n'utilise pas LOWER()
-    // La plupart des collations MySQL par défaut sont insensibles à la casse de toute façon.
+    // Recherche avancée
     @Query("SELECT o FROM JobOffer o WHERE o.status = :status AND " +
             "(LOWER(o.title) LIKE :processedSearchTerm OR " +
             "o.description LIKE :processedSearchTerm OR " +
             "LOWER(o.location) LIKE :processedSearchTerm)")
     List<JobOffer> findPublishedOffersBySearchTerm(
             @Param("status") OfferStatus status,
-            @Param("processedSearchTerm") String processedSearchTerm // Le paramètre est renommé pour plus de clarté
+            @Param("processedSearchTerm") String processedSearchTerm
     );
+
+    // --- POUR LE DASHBOARD ---
+    long countByStatus(OfferStatus status);
 }

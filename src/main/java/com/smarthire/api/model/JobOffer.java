@@ -70,4 +70,13 @@ public class JobOffer {
 
     @UpdateTimestamp
     private Instant updatedAt;
+
+
+    // Getters et Setters (si vous n'utilisez pas Lombok, sinon @Data s'en occupe)
+    @Lob
+    @Column(length = 10000000) // Pour permettre des images de grande taille
+    private byte[] image;
+
+    private String imageContentType;
+
 }

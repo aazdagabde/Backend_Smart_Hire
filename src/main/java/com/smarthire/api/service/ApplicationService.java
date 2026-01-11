@@ -328,7 +328,7 @@ public class ApplicationService {
                                 app.getApplicant().getFirstName(),
                                 app.getApplicant().getEmail(),
                                 offer.getTitle(),
-                                app.getCvScore()
+                                Double.valueOf(app.getCvScore())
                         );
                     } catch (Exception e) {
                         // On log l'erreur sans bloquer la transaction

@@ -15,6 +15,7 @@ public record JobOfferResponse(
         Long createdById,
         String createdByFullName,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        boolean hasImage
 ) {
 }
