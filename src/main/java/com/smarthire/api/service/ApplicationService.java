@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smarthire.api.dto.ApplicationCustomDataResponse;
 import com.smarthire.api.dto.ApplicationRequestData;
 import com.smarthire.api.dto.ApplicationResponse;
+import com.smarthire.api.dto.BulkActionRequest;
 import com.smarthire.api.dto.UpdateApplicationStatusRequest;
 import com.smarthire.api.dto.UpdateCvScoreRequest;
 import com.smarthire.api.dto.UpdateInternalNotesRequest;
@@ -21,8 +22,16 @@ import com.smarthire.api.repository.ApplicationRepository;
 import com.smarthire.api.repository.CustomFormFieldRepository;
 import com.smarthire.api.repository.JobOfferRepository;
 import com.smarthire.api.repository.UserRepository;
+import com.smarthire.api.utils.PdfUtils;
+// Import manquant ajouté
+import com.smarthire.api.service.N8nService;
+import com.smarthire.api.service.AIService;
+
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,8 +55,12 @@ public class ApplicationService {
     private final CustomFormFieldRepository customFormFieldRepository;
     private final ObjectMapper objectMapper;
 
+    @Autowired
+    @Lazy
+    private AIService aiService;
+
     private final long MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
-    private final N8nService n8nService; // <--- 1. AJOUTER L'INJECTION ICI
+    private final N8nService n8nService;
 
     // 1. POSTULER À UNE OFFRE
     @Transactional
@@ -281,7 +294,6 @@ public class ApplicationService {
     }
 
     // 10. SÉLECTIONNER AUTOMATIQUEMENT LES MEILLEURS CANDIDATS
-// 10. SÉLECTIONNER AUTOMATIQUEMENT LES MEILLEURS CANDIDATS
     @Transactional
     public List<ApplicationResponse> selectTopCandidates(Long offerId, int topN, String rhEmail) {
         // 1. Vérifier RH et Offre
@@ -308,9 +320,6 @@ public class ApplicationService {
         int countSelected = 0;
 
         for (Application app : sortedApps) {
-            // On ne traite que ceux qui n'ont pas encore été rejetés ou acceptés manuellement (optionnel, selon votre logique)
-            // Ici, on considère qu'on peut repêcher n'importe qui pour le Top N
-
             if (countSelected < topN) {
                 // --- SÉLECTIONNER ---
                 if (app.getStatus() != ApplicationStatus.ACCEPTED) { // Éviter de renvoyer un mail si déjà accepté
@@ -328,7 +337,7 @@ public class ApplicationService {
                                 app.getApplicant().getFirstName(),
                                 app.getApplicant().getEmail(),
                                 offer.getTitle(),
-                                Double.valueOf(app.getCvScore())
+                                app.getCvScore() != null ? Double.valueOf(app.getCvScore()) : 0.0
                         );
                     } catch (Exception e) {
                         // On log l'erreur sans bloquer la transaction
@@ -336,26 +345,23 @@ public class ApplicationService {
                     }
                 }
                 countSelected++;
-            } else {
-                // --- (Optionnel) REJETER LES AUTRES ---
-                // app.setStatus(ApplicationStatus.REJECTED);
-                // applicationRepository.save(app);
             }
         }
 
-        // Retourner la liste mise à jour (rechargée depuis la base ou juste la liste triée modifiée)
+        // Retourner la liste mise à jour
         return sortedApps.stream()
                 .map(ApplicationResponse::fromEntity)
                 .collect(Collectors.toList());
     }
+
     @Transactional
     public void inviteCandidate(Long applicationId, String message, String date, String rhEmail) {
         // On vérifie que le RH a le droit
         Application app = findApplicationAndVerifyOwnership(applicationId, rhEmail);
 
-        // On met à jour le statut (ACCEPTED correspond à "Candidature acceptée pour entretien" dans votre Enum)
+        // On met à jour le statut
         app.setStatus(ApplicationStatus.ACCEPTED);
-        app.setCandidateMessage(message); // On sauvegarde le message personnalisé
+        app.setCandidateMessage(message);
         applicationRepository.save(app);
 
         // On déclenche le webhook n8n
@@ -366,6 +372,107 @@ public class ApplicationService {
                 message,
                 date
         );
+    }
+
+    @Transactional
+    public String generateAiSummary(Long applicationId, String userEmail) {
+        Application app = getApplicationCv(applicationId, userEmail);
+
+        // Si déjà généré, on retourne directement
+        if (app.getAiSummary() != null && !app.getAiSummary().isEmpty()) {
+            return app.getAiSummary();
+        }
+
+        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
+        String summary = aiService.generateCandidateSummary(app.getJobOffer(), cvText);
+
+        app.setAiSummary(summary);
+        applicationRepository.save(app);
+        return summary;
+    }
+
+    @Transactional
+    public String generateAiInterviewQuestions(Long applicationId, String userEmail) {
+        Application app = getApplicationCv(applicationId, userEmail);
+
+        if (app.getAiInterviewQuestions() != null && !app.getAiInterviewQuestions().isEmpty()) {
+            return app.getAiInterviewQuestions();
+        }
+
+        String cvText = PdfUtils.extractTextFromPdf(app.getCvData());
+
+        String questions = aiService.generateInterviewQuestions(app.getJobOffer(), cvText);
+
+        app.setAiInterviewQuestions(questions);
+        applicationRepository.save(app);
+        return questions;
+    }
+
+    /**
+     * Exécute une action de masse sur les N meilleurs candidats
+     */
+    @Transactional
+    public void executeBulkAction(Long offerId, BulkActionRequest request) {
+        // 1. Récupérer les N meilleurs candidats
+        // On utilise PageRequest pour limiter le nombre de résultats à "topCount"
+        List<Application> topCandidates = applicationRepository.findTopByOfferIdOrderByCvScoreDesc(
+                offerId,
+                PageRequest.of(0, request.topCount())
+        );
+
+        if (topCandidates.isEmpty()) {
+            throw new EntityNotFoundException("Aucun candidat trouvé pour cette offre.");
+        }
+
+        // 2. Traiter chaque candidat selon l'action choisie
+        for (Application app : topCandidates) {
+
+            // On vérifie le type d'action demandé par le RH
+            if ("INTERVIEW".equalsIgnoreCase(request.actionType())) {
+
+                // --- CAS 1 : INVITER À UN ENTRETIEN ---
+                app.setStatus(ApplicationStatus.INTERVIEW_SCHEDULED);
+                applicationRepository.save(app);
+
+                // Appel N8N spécifique pour l'invitation
+                // On passe le message personnalisé du RH s'il existe
+                String msg = (request.message() != null && !request.message().isEmpty())
+                        ? request.message()
+                        : "Félicitations, votre profil a retenu notre attention.";
+
+                try {
+                    // CORRECTION ICI : Utiliser la signature correcte de n8nService
+                    n8nService.triggerInviteCandidate(
+                            app.getApplicant().getFirstName(),
+                            app.getApplicant().getEmail(),
+                            app.getJobOffer().getTitle(),
+                            msg,
+                            "Date à définir"
+                    );
+                } catch (Exception e) {
+                    System.err.println("Erreur N8N (Invitation) pour app " + app.getId() + ": " + e.getMessage());
+                }
+
+            } else if ("ACCEPT".equalsIgnoreCase(request.actionType())) {
+
+                // --- CAS 2 : ACCEPTER DÉFINITIVEMENT ---
+                app.setStatus(ApplicationStatus.ACCEPTED);
+                applicationRepository.save(app);
+
+                // Appel N8N spécifique pour l'acceptation (Top Profil / Selected)
+                try {
+                    // CORRECTION ICI : Utiliser la signature correcte de n8nService
+                    n8nService.triggerCandidateSelected(
+                            app.getApplicant().getFirstName(),
+                            app.getApplicant().getEmail(),
+                            app.getJobOffer().getTitle(),
+                            app.getCvScore() != null ? Double.valueOf(app.getCvScore()) : 0.0
+                    );
+                } catch (Exception e) {
+                    System.err.println("Erreur N8N (Acceptation) pour app " + app.getId() + ": " + e.getMessage());
+                }
+            }
+        }
     }
 
     // Méthode utilitaire pour factoriser la recherche et la vérification de propriété

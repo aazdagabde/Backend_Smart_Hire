@@ -2,7 +2,9 @@ package com.smarthire.api.repository;
 
 import com.smarthire.api.model.Application;
 import com.smarthire.api.model.enums.ApplicationStatus;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -24,4 +26,7 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
 
     // Compter MES candidatures par statut (ex: combien sont en attente ?)
     long countByApplicantIdAndStatus(Long applicantId, ApplicationStatus status);
+
+    @Query("SELECT a FROM Application a WHERE a.jobOffer.id = :offerId ORDER BY a.cvScore DESC NULLS LAST")
+    List<Application> findTopByOfferIdOrderByCvScoreDesc(Long offerId, PageRequest pageable);
 }
