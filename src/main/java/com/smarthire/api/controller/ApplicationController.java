@@ -329,6 +329,22 @@ public class ApplicationController {
         }
     }
 
+    // 2. Endpoint pour le choix "Sélection Automatique des N premiers"
+    @PostMapping("/{id}/bulk-select")
+    @PreAuthorize("hasAuthority('ROLE_RH')")
+    public ResponseEntity<?> bulkSelectCandidates(
+            @PathVariable Long id,
+            @RequestBody BulkActionRequest request) {
+        try {
+            applicationService.executeBulkAction(id, request);
+            return ResponseEntity.ok(createSuccessResponse(null, "Action de masse exécutée avec succès."));
+        } catch (EntityNotFoundException e) {
+            return createErrorResponse(HttpStatus.NOT_FOUND, e.getMessage(), null);
+        } catch (Exception e) {
+            return createErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de l'action de masse", e.getMessage());
+        }
+    }
+
     // --- Méthodes utilitaires ---
 
     private String getAuthenticatedUserEmail() {
