@@ -121,6 +121,10 @@ public class AuthService {
         if (request.password().length() < 6) {
             throw new IllegalArgumentException("Le mot de passe doit contenir au moins 6 caractères");
         }
+
+        if (request.role()== null) {
+            throw new IllegalArgumentException("Le role est obligatoire !!!");
+        }
         // Pas de validation pour le phoneNumber, il est optionnel
     }
 
